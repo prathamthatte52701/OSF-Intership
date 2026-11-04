@@ -1,0 +1,57 @@
+import Database from 'better-sqlite3';
+import { mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+const databasePath = resolve(process.env.DATABASE_PATH || 'server/data/osf.sqlite');
+mkdirSync(dirname(databasePath), { recursive: true });
+export const db = new Database(databasePath);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS companies (
+    id TEXT PRIMARY KEY,
+    company_name TEXT NOT NULL,
+    pan TEXT,
+    msme TEXT,
+    address1 TEXT NOT NULL,
+    address2 TEXT,
+    country TEXT NOT NULL,
+    country_code TEXT NOT NULL,
+    state TEXT,
+    city TEXT NOT NULL,
+    postal TEXT,
+    contact_name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    phone_e164 TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','VERIFIED')),
+    created_at TEXT NOT NULL,
+    verified_at TEXT
+  );
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT,
+    setup_token_hash TEXT,
+    setup_expires_at INTEGER,
+    password_changed_at TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS otp_challenges (
+    company_id TEXT PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+    otp_hash TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    resend_count INTEGER NOT NULL DEFAULT 0,
+    resend_window_started_at INTEGER NOT NULL,
+    last_sent_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
+`);

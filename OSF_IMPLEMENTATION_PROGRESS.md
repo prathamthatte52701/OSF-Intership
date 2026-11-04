@@ -4,7 +4,7 @@
 
 - The supplied `E:\OSF-Intership` workspace was empty: no source files, framework, routes, backend, or package scripts were present.
 - A small React + Vite frontend was created. The supplied OSF logo image is stored at `public/osf-logo.png`.
-- This project is a UI demonstration only. Registration state, OTP, credentials, and authentication are simulated in the browser; there is no backend or real email delivery.
+- Phase 9 was a browser UI demonstration. Phase 10 adds a local Express API, SQLite persistence, server-side OTP/authentication, and Gmail SMTP integration driven by environment variables.
 
 ## Completed phases
 
@@ -60,6 +60,20 @@
 - Added international phone validation/E.164 normalization and country calling-code selector; improved optional postal-code handling and dark-theme link contrast.
 - Build passed. Vite reports the lazy city-data chunk size; it loads only after state selection.
 
-## Next phase
+### Phase 10 — Backend and Gmail integration (implementation in progress)
 
-- Phase 10 backend, database, and Gmail SMTP integration. No backend/database existed in the original project. Local development can use SQLite; the production database/provider still needs confirmation. Gmail sending still requires the sender address and App Password to be configured locally, plus an explicitly approved test recipient.
+- Added Express API routes for company registration, email verification, one-time password setup, login/logout, session lookup, protected company profile, and password changes.
+- Added local SQLite persistence for company, user, OTP challenge, and session records. Database path is configurable with `DATABASE_PATH`; SQLite is for local development only.
+- Added server-side validation, OTP HMAC hashing, attempt/resend limits, Argon2id password hashes, one-time setup links, HTTP-only session cookies, Helmet headers, and API rate limiting.
+- Added Nodemailer Gmail SMTP templates for OTP, password setup, and password-change notification. Credentials are read only from server `.env` and are not committed.
+- Wired UI API mode to the backend and added email OTP and password setup screens; mock preview remains only in explicit mock mode.
+- Local checks: production frontend build passed; API started with a temporary local secret; `/api/health` returned OK and reported Gmail unconfigured; invalid registration was rejected with HTTP 400.
+- Not yet verified: successful email delivery and a full registration-to-login journey, because no `.env`/Gmail App Password or approved recipient is available. Do not claim Gmail sending works until that test passes.
+
+## Run locally
+
+1. Copy `.env.example` to `.env` and set `OTP_HMAC_SECRET` (at least 32 random characters), `EMAIL_USER`, and a Gmail App Password in `EMAIL_APP_PASSWORD`.
+2. Run `npm run server` in one terminal and `npm run dev` in another.
+3. Open the Vite URL. Registration emails are sent to the email entered in the form.
+
+Never commit `.env` or paste the Gmail App Password into chat. Production use still needs a chosen production database/hosting configuration and deployment security review.
