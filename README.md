@@ -2,6 +2,8 @@
 
 Responsive company registration portal for Our Startup Freelancer.
 
+Company registration is limited to India. PAN, MSME registration, and phone are optional; state, city, and a six-digit PIN Code are required. PAN is validated when supplied, and phone numbers must be Indian numbers.
+
 ## Project layout
 
 ```text
@@ -45,6 +47,8 @@ npm run dev
 To run both from the project root instead, run `npm install` and then `npm run dev`.
 
 The API listens on `http://localhost:4000`; Vite forwards `/api` requests to it. SQLite data is created locally under `server/data/` and is ignored by Git.
+
+Authenticated company profile updates use `POST /api/company/profile`; the server derives the company from the session and keeps the verified email read-only. `/contact` displays demo placeholders until verified OSF support details are configured.
 
 ## Build the frontend
 

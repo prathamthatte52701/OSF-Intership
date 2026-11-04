@@ -27,5 +27,6 @@ export const api = {
   session: () => request('/auth/session'),
   logout: () => post('/auth/logout', {}),
   profile: () => request('/company/profile'),
+  updateProfile: body => post('/company/profile', body),
   changePassword: body => post('/auth/change-password', body),
 };

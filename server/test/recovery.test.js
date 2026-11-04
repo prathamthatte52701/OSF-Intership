@@ -119,7 +119,7 @@ test('password setup delivery recovery persists, rotates tokens, rate-limits, co
   assert.equal(failed.user.password_setup_status, 'PENDING');
   assert.equal((await request('/api/registrations', {
     companyName: 'Duplicate Co', pan: 'ABCPC1234F', address1: '10 Main Street', country: 'India', countryCode: 'IN',
-    city: 'Pune', postal: '411001', contactName: 'Aanya Sharma', email: 'second@company.example',
+    state: 'Maharashtra', city: 'Pune', postal: '411001', contactName: 'Aanya Sharma', email: 'second@company.example',
   })).status, 409, 'recovery must not create another registration');
 
   // Simulates refresh/reopen: recovery uses the saved account email, with no registration state.

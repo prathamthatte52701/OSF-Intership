@@ -15,6 +15,7 @@
     "express-rate-limit": "^8.7.3",
     "helmet": "^8.3.0",
     "nodemailer": "^10.3.1",
+    "country-state-city": "^3.2.1",
     "libphonenumber-js": "^1.13.15"
   }
 }
