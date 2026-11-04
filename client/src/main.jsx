@@ -2,119 +2,1965 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import CompanyProfile from './CompanyProfile.jsx';
 import ContactUs from './ContactUs.jsx';
-import { citiesForState, INDIAN_STATES, normalizeIndianPhone, validateIndiaFields } from './india.js';
+import { citiesForState, INDIAN_STATES, normalizeIndianPhone } from './india.js';
 import { api } from './api.js';
 import './styles.css';
 
-const iconPaths={ArrowLeft:'M19 12H5 M12 19l-7-7 7-7',ArrowRight:'M5 12h14 M12 5l7 7-7 7',Building2:'M3 21h18 M5 21V7l8-4v18 M19 21V11l-6-4 M9 9v.01 M9 12v.01 M9 15v.01 M9 18v.01 M14 9v.01 M14 12v.01',Check:'M20 6 9 17l-5-5',CheckCircle2:'M22 11.08V12a10 10 0 1 1-5.93-9.14 M22 4 12 14.01l-3-3',ChevronDown:'m6 9 6 6 6-6',CircleHelp:'M9.09 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3 M12 17h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',Clock3:'M12 8v4l3 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',Eye:'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',EyeOff:'m3 3 18 18 M10.6 10.6a2 2 0 0 0 2.8 2.8 M9.9 5.2A10 10 0 0 1 12 5c6.4 0 10 7 10 7a16 16 0 0 1-3 3.8 M6.6 6.6C3.6 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 4-.8',FileCheck2:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M8 13l2 2 4-4',Globe2:'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M2 12h20 M12 2a15 15 0 0 1 0 20 M12 2a15 15 0 0 0 0 20',LayoutDashboard:'M3 3h8v8H3z M13 3h8v5h-8z M13 10h8v11h-8z M3 13h8v8H3z',LogOut:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',Mail:'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z M22 6l-10 7L2 6',MapPin:'M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',Moon:'M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z',MoreHorizontal:'M12 12h.01 M19 12h.01 M5 12h.01',Search:'m21 21-4.3-4.3 M19 10.5a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0',ShieldCheck:'M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z M9 12l2 2 4-4',Sun:'M12 2v2 M12 20v2 M4.93 4.93l1.42 1.42 M17.65 17.65l1.42 1.42 M2 12h2 M20 12h2 M4.93 19.07l1.42-1.42 M17.65 6.35l1.42-1.42 M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',UserRound:'M20 21a8 8 0 0 0-16 0 M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z',X:'M18 6 6 18 M6 6l12 12'};
-function Icon({name,size=18,...props}){return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>{(iconPaths[name]||'').split(' M').map((d,i)=><path key={i} d={(i?'M':'')+d}/>)}</svg>}
-const ArrowLeft=props=><Icon name="ArrowLeft" {...props}/>;const ArrowRight=props=><Icon name="ArrowRight" {...props}/>;const Building2=props=><Icon name="Building2" {...props}/>;const Check=props=><Icon name="Check" {...props}/>;const CheckCircle2=props=><Icon name="CheckCircle2" {...props}/>;const ChevronDown=props=><Icon name="ChevronDown" {...props}/>;const CircleHelp=props=><Icon name="CircleHelp" {...props}/>;const Clock3=props=><Icon name="Clock3" {...props}/>;const Eye=props=><Icon name="Eye" {...props}/>;const EyeOff=props=><Icon name="EyeOff" {...props}/>;const FileCheck2=props=><Icon name="FileCheck2" {...props}/>;const Globe2=props=><Icon name="Globe2" {...props}/>;const LayoutDashboard=props=><Icon name="LayoutDashboard" {...props}/>;const LogOut=props=><Icon name="LogOut" {...props}/>;const Mail=props=><Icon name="Mail" {...props}/>;const MapPin=props=><Icon name="MapPin" {...props}/>;const Moon=props=><Icon name="Moon" {...props}/>;const MoreHorizontal=props=><Icon name="MoreHorizontal" {...props}/>;const Search=props=><Icon name="Search" {...props}/>;const ShieldCheck=props=><Icon name="ShieldCheck" {...props}/>;const Sun=props=><Icon name="Sun" {...props}/>;const UserRound=props=><Icon name="UserRound" {...props}/>;const X=props=><Icon name="X" {...props}/>;
+/* SVG Icon Component */
+const iconPaths = {
+  ArrowLeft: 'M19 12H5 M12 19l-7-7 7-7',
+  ArrowRight: 'M5 12h14 M12 5l7 7-7 7',
+  Building2: 'M3 21h18 M5 21V7l8-4v18 M19 21V11l-6-4 M9 9v.01 M9 12v.01 M9 15v.01 M9 18v.01 M14 9v.01 M14 12v.01',
+  Check: 'M20 6 9 17l-5-5',
+  CheckCircle2: 'M22 11.08V12a10 10 0 1 1-5.93-9.14 M22 4 12 14.01l-3-3',
+  ChevronDown: 'm6 9 6 6 6-6',
+  CircleHelp: 'M9.09 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3 M12 17h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+  Clock3: 'M12 8v4l3 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+  Eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+  EyeOff: 'm3 3 18 18 M10.6 10.6a2 2 0 0 0 2.8 2.8 M9.9 5.2A10 10 0 0 1 12 5c6.4 0 10 7 10 7a16 16 0 0 1-3 3.8 M6.6 6.6C3.6 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 4-.8',
+  FileCheck2: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M8 13l2 2 4-4',
+  Globe2: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M2 12h20 M12 2a15 15 0 0 1 0 20 M12 2a15 15 0 0 0 0 20',
+  LayoutDashboard: 'M3 3h8v8H3z M13 3h8v5h-8z M13 10h8v11h-8z M3 13h8v8H3z',
+  LogOut: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
+  Mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z M22 6l-10 7L2 6',
+  MapPin: 'M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
+  Moon: 'M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z',
+  MoreHorizontal: 'M12 12h.01 M19 12h.01 M5 12h.01',
+  Search: 'm21 21-4.3-4.3 M19 10.5a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0',
+  ShieldCheck: 'M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z M9 12l2 2 4-4',
+  Sun: 'M12 2v2 M12 20v2 M4.93 4.93l1.42 1.42 M17.65 17.65l1.42 1.42 M2 12h2 M20 12h2 M4.93 19.07l1.42-1.42 M17.65 6.35l1.42-1.42 M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
+  UserRound: 'M20 21a8 8 0 0 0-16 0 M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z',
+  X: 'M18 6 6 18 M6 6l12 12',
+  AlertCircle: 'M12 8v4 M12 16h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+};
 
-const EMPTY = { company:'', pan:'', msme:'', address1:'', address2:'', country:'India', state:'', city:'', postal:'', contact:'', email:'', phone:'' };
-const PASSWORD_RULES = { min:12, upper:/[A-Z]/, lower:/[a-z]/, number:/\d/, special:/[^A-Za-z0-9]/ };
-const DASHBOARD_SAMPLE={userId:'OSF-482716',profile:{company:'Northstar Labs',contact:'Aanya Sharma',email:'aanya@northstarlabs.example',country:'India',countryCode:'IN',state:'Maharashtra',city:'Pune',pan:'ABCPN1234F',address1:'22 Residency Road',address2:'Koregaon Park',postal:'411001',phone:'+91 98765 43210'},registeredAt:'2026-10-18T10:00:00Z',verifiedAt:'2026-10-18T10:05:00Z',passwordChangedAt:'2026-10-18T10:12:00Z',activity:['Company registration completed','Email address verified','Password setup completed','Company profile reviewed']};
+function Icon({ name, size = 18, ...props }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      {(iconPaths[name] || '').split(' M').map((d, i) => (
+        <path key={i} d={(i ? 'M' : '') + d} />
+      ))}
+    </svg>
+  );
+}
+
+const EMPTY_FORM = {
+  company: '',
+  pan: '',
+  msme: '',
+  address1: '',
+  address2: '',
+  country: 'India',
+  state: '',
+  city: '',
+  postal: '',
+  contact: '',
+  email: '',
+  phone: '',
+};
+
+const PASSWORD_RULES = {
+  min: 12,
+  upper: /[A-Z]/,
+  lower: /[a-z]/,
+  number: /\d/,
+  special: /[^A-Za-z0-9]/,
+};
+
 const apiMode = import.meta.env.VITE_AUTH_MODE !== 'mock';
 const startPath = location.pathname === '/' ? '/register' : location.pathname;
-const readStore = key => { try{return JSON.parse(localStorage.getItem(key)||'null')}catch{return null} };
-const tabForPath=path=>path.endsWith('/company')?'Company Profile':path.endsWith('/account')?'Account Information':path.endsWith('/activity')?'Activity':'Overview';
-function titleCaseName(value){return value.toLocaleLowerCase().split(/([ '\-.])/).map(part=>/[\p{L}]/u.test(part)?part[0].toLocaleUpperCase()+part.slice(1):part).join('')}
-function secureRandomInt(max){const n=new Uint32Array(1);crypto.getRandomValues(n);return n[0]%max}
-function toUiProfile(company){return {company:company.companyName,pan:company.pan,msme:company.msme,address1:company.address1,address2:company.address2,country:company.country,countryCode:company.countryCode,state:company.state,city:company.city,postal:company.postal,contact:company.contactName,email:company.email,phone:company.phone}}
-function App(){
-  const [page,setPage]=useState(startPath),[dark,setDark]=useState(()=>{try{return localStorage.getItem('osf-theme')==='dark'}catch{return false}});
-  const [form,setForm]=useState(()=>apiMode?EMPTY:(readStore('osf-demo-profile')||EMPTY)),[step,setStep]=useState(1),[errors,setErrors]=useState({});
-  const [account,setAccount]=useState(()=>apiMode?null:readStore('osf-demo-account')),[session,setSession]=useState(()=>apiMode?null:readStore('osf-demo-session')),[credential,setCredential]=useState(''),[authLoading,setAuthLoading]=useState(apiMode);
-  const [cityOptions,setCityOptions]=useState([]);
-  const [citiesLoading,setCitiesLoading]=useState(false);
-  const [pendingRegistration,setPendingRegistration]=useState(()=>{try{return JSON.parse(sessionStorage.getItem('osf-pending-registration')||'null')}catch{return null}}),[emailDeliveryFailed,setEmailDeliveryFailed]=useState(false),[verifiedRegistration,setVerifiedRegistration]=useState(null);
-  const [otp,setOtp]=useState(''),[otpExpiry,setOtpExpiry]=useState(0),[cooldown,setCooldown]=useState(0),[attempts,setAttempts]=useState(0),[resends,setResends]=useState(0);
-  const [showOtp,setShowOtp]=useState(false),[notice,setNotice]=useState(''),[modal,setModal]=useState(''),[busy,setBusy]=useState(false),[loginId,setLoginId]=useState(''),[loginPassword,setLoginPassword]=useState(''),[dashboardPreview,setDashboardPreview]=useState(false);
-  const [currentPassword,setCurrentPassword]=useState(''),[newPassword,setNewPassword]=useState(''),[confirmPassword,setConfirmPassword]=useState(''),[showPassword,setShowPassword]=useState(false),[dashTab,setDashTab]=useState(()=>tabForPath(startPath));
-  const [setupPassword,setSetupPassword]=useState(''),[setupConfirmation,setSetupConfirmation]=useState('');
-  const [setupEmail,setSetupEmail]=useState(''),[showSetupRecovery,setShowSetupRecovery]=useState(false),[setupRecoveryState,setSetupRecoveryState]=useState('idle'),[setupRecoveryMessage,setSetupRecoveryMessage]=useState(''),[setupRecoveryCooldown,setSetupRecoveryCooldown]=useState(0),[setupLinkError,setSetupLinkError]=useState('');
-  useEffect(()=>{document.documentElement.dataset.theme=dark?'dark':'light';try{localStorage.setItem('osf-theme',dark?'dark':'light')}catch{}},[dark]);
-  useEffect(()=>{if(!apiMode)localStorage.setItem('osf-demo-profile',JSON.stringify(form))},[form]);
-  useEffect(()=>{if(apiMode)return;if(account){const {password,...safeAccount}=account;localStorage.setItem('osf-demo-account',JSON.stringify(safeAccount))}else localStorage.removeItem('osf-demo-account')},[account]);
-  useEffect(()=>{if(apiMode)return;if(session)localStorage.setItem('osf-demo-session',JSON.stringify(session));else localStorage.removeItem('osf-demo-session')},[session]);
-  useEffect(()=>{if(apiMode){if(pendingRegistration)sessionStorage.setItem('osf-pending-registration',JSON.stringify(pendingRegistration));else sessionStorage.removeItem('osf-pending-registration')}},[pendingRegistration]);
-  useEffect(()=>{const id=setInterval(()=>{setCooldown(v=>Math.max(0,v-1));setSetupRecoveryCooldown(v=>Math.max(0,v-1));if(otpExpiry&&Date.now()>otpExpiry)setShowOtp(false)},1000);return()=>clearInterval(id)},[otpExpiry]);
-  useEffect(()=>{if(notice){const id=setTimeout(()=>setNotice(''),4200);return()=>clearTimeout(id)}},[notice]);
-  useEffect(()=>{if(!apiMode)return;let active=true;api.session().then(async result=>{const profile=await api.profile();if(!active)return;setSession({userId:result.userId});setAccount({userId:result.userId,profile:toUiProfile(profile.company),activity:[]})}).catch(()=>{}).finally(()=>{if(active)setAuthLoading(false)});return()=>{active=false}},[]);
-  const go=path=>{history.pushState({},'',path);setPage(path);setErrors({});setNotice('');window.scrollTo(0,0)};
-  const update=(key,value)=>setForm(f=>({...f,[key]:value}));
-  useEffect(()=>{const handle=()=>{if(apiMode&&authLoading)return;let p=location.pathname==='/'?'/register':location.pathname;if(p.startsWith('/dashboard')&&!session&&p!=='/dashboard-preview'){p='/login';history.replaceState({},'',p)}else if(p.startsWith('/dashboard')&&account?.mustChangePassword){p='/change-password';history.replaceState({},'',p)}else if(p==='/change-password'&&(!session||(!account?.mustChangePassword&&!apiMode))){p=session?'/dashboard':'/login';history.replaceState({},'',p)}else if(p==='/verify-email'&&(apiMode?!pendingRegistration:!otp)){p='/register';history.replaceState({},'',p)}setPage(p);setDashTab(tabForPath(p));setErrors({})};handle();window.addEventListener('popstate',handle);return()=>window.removeEventListener('popstate',handle)},[session,account,otp,pendingRegistration,authLoading]);
-  useEffect(()=>{let active=true;if(!form.state){setCityOptions([]);setCitiesLoading(false);return()=>{active=false}}setCityOptions([]);setCitiesLoading(true);citiesForState(form.state).then(cities=>{if(active)setCityOptions(cities)}).finally(()=>{if(active)setCitiesLoading(false)});return()=>{active=false}},[form.state]);
-  const notify=(type,msg)=>setNotice(`${type}|${msg}`);
-  const stepFields={1:['company','pan'],2:['address1','country','state','city','postal'],3:['contact','email','phone']};
-  function validateField(k){const v=(form[k]||'').trim();let e='';
-    if(['company','address1','country','city','contact','email'].includes(k)&&!v)e='This field is required.';
-    if(k==='company'&&v&&!/^[\p{L}\p{N}&.,'()\- ]{2,150}$/u.test(v.replace(/\s+/g,' ')))e='Use 2–150 characters, with common business punctuation.';
-    if(k==='pan'&&v&&!/^[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}[A-Z]$/i.test(v))e='Enter a valid 10-character Indian PAN.';
-    if(k==='state'&&!INDIAN_STATES.some(state=>state.name===v))e='Select an Indian state or Union Territory.';
-    if(k==='contact'&&v&&!/^[\p{L}][\p{L} .'-]{1,99}$/u.test(v))e='Enter a valid name using letters, spaces, apostrophes, periods or hyphens.';
-    if(k==='email'&&v&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))e='Enter a valid email address.';
-    if(k==='city'&&!cityOptions.includes(v))e='Select a city in the chosen Indian state or Union Territory.';
-    if(k==='postal'&&!/^\d{6}$/.test(v))e='Enter a six-digit PIN Code.';
-    if(k==='phone'&&v&&!normalizeIndianPhone(v))e='Enter a valid Indian phone number.';
+
+function tabForPath(path) {
+  if (path.endsWith('/company')) return 'Company Profile';
+  if (path.endsWith('/account')) return 'Account Information';
+  if (path.endsWith('/activity')) return 'Activity';
+  return 'Overview';
+}
+
+function titleCaseName(value) {
+  return value
+    .toLocaleLowerCase()
+    .split(/([ '\-.])/)
+    .map(part => (part && /[\p{L}]/u.test(part) ? part[0].toLocaleUpperCase() + part.slice(1) : part))
+    .join('');
+}
+
+function maskEmail(email = '') {
+  const [u, d = ''] = email.split('@');
+  return u ? `${u.slice(0, 2)}${'•'.repeat(Math.max(2, u.length - 2))}@${d}` : 'your email';
+}
+
+function toUiProfile(company) {
+  if (!company) return EMPTY_FORM;
+  return {
+    company: company.companyName || '',
+    pan: company.pan || '',
+    msme: company.msme || '',
+    address1: company.address1 || '',
+    address2: company.address2 || '',
+    country: company.country || 'India',
+    countryCode: company.countryCode || 'IN',
+    state: company.state || '',
+    city: company.city || '',
+    postal: company.postal || '',
+    contact: company.contactName || '',
+    email: company.email || '',
+    phone: company.phone || '',
+  };
+}
+
+function App() {
+  const [page, setPage] = useState(startPath);
+  const [dark, setDark] = useState(() => {
+    try {
+      const q = new URLSearchParams(location.search).get('theme');
+      if (q === 'dark') return true;
+      if (q === 'light') return false;
+      return localStorage.getItem('osf-theme') === 'dark';
+    } catch {
+      return false;
+    }
+  });
+
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [step, setStep] = useState(1);
+  const [errors, setErrors] = useState({});
+
+  const [account, setAccount] = useState(null);
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(apiMode);
+
+  const [cityOptions, setCityOptions] = useState([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+
+  const [pendingRegistration, setPendingRegistration] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('osf-pending-registration') || 'null');
+    } catch {
+      return null;
+    }
+  });
+
+  const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
+  const [verifiedRegistration, setVerifiedRegistration] = useState(null);
+
+  const [otpInput, setOtpInput] = useState('');
+  const [otpExpiry, setOtpExpiry] = useState(0);
+  const [cooldown, setCooldown] = useState(0);
+
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const [loginId, setLoginId] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [dashTab, setDashTab] = useState(() => tabForPath(startPath));
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [setupPassword, setSetupPassword] = useState('');
+  const [setupConfirmation, setSetupConfirmation] = useState('');
+  const [setupEmail, setSetupEmail] = useState('');
+  const [showSetupRecovery, setShowSetupRecovery] = useState(false);
+  const [setupRecoveryState, setSetupRecoveryState] = useState('idle');
+  const [setupRecoveryMessage, setSetupRecoveryMessage] = useState('');
+  const [setupRecoveryCooldown, setSetupRecoveryCooldown] = useState(0);
+  const [setupLinkError, setSetupLinkError] = useState('');
+
+  /* Sync Theme */
+  useEffect(() => {
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    try {
+      localStorage.setItem('osf-theme', dark ? 'dark' : 'light');
+    } catch {}
+  }, [dark]);
+
+  /* Persist pending registration */
+  useEffect(() => {
+    if (pendingRegistration) {
+      sessionStorage.setItem('osf-pending-registration', JSON.stringify(pendingRegistration));
+    } else {
+      sessionStorage.removeItem('osf-pending-registration');
+    }
+  }, [pendingRegistration]);
+
+  /* Timers */
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCooldown(v => Math.max(0, v - 1));
+      setSetupRecoveryCooldown(v => Math.max(0, v - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  /* Toast Notification Auto-dismiss */
+  useEffect(() => {
+    if (notice) {
+      const id = setTimeout(() => setNotice(''), 4500);
+      return () => clearTimeout(id);
+    }
+  }, [notice]);
+
+  /* Restore Session from API on mount */
+  useEffect(() => {
+    if (!apiMode) return;
+    let active = true;
+    api.session()
+      .then(async result => {
+        const profileRes = await api.profile();
+        if (!active) return;
+        setSession({ userId: result.userId });
+        setAccount({
+          userId: result.userId,
+          profile: toUiProfile(profileRes.company),
+          activity: [],
+        });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setAuthLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const go = path => {
+    history.pushState({}, '', path);
+    setPage(path);
+    setErrors({});
+    setNotice('');
+    window.scrollTo(0, 0);
+  };
+
+  const update = (key, value) => {
+    setForm(f => ({ ...f, [key]: value }));
+    setErrors(e => ({ ...e, [key]: '' }));
+  };
+
+  /* Route Handling & Guards */
+  useEffect(() => {
+    const handle = () => {
+      if (apiMode && authLoading) return;
+      let p = location.pathname === '/' ? '/register' : location.pathname;
+
+      if (p.startsWith('/dashboard') && !session) {
+        p = '/login';
+        history.replaceState({}, '', p);
+      } else if (p.startsWith('/dashboard') && account?.mustChangePassword) {
+        p = '/change-password';
+        history.replaceState({}, '', p);
+      } else if (p === '/change-password' && !session) {
+        p = '/login';
+        history.replaceState({}, '', p);
+      } else if (p === '/verify-email' && !pendingRegistration) {
+        p = '/register';
+        history.replaceState({}, '', p);
+      }
+
+      setPage(p);
+      setDashTab(tabForPath(p));
+      setErrors({});
+    };
+
+    handle();
+    window.addEventListener('popstate', handle);
+    return () => window.removeEventListener('popstate', handle);
+  }, [session, account, pendingRegistration, authLoading]);
+
+  /* State -> City Dropdown synchronization */
+  useEffect(() => {
+    let active = true;
+    if (!form.state) {
+      setCityOptions([]);
+      setCitiesLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+    setCityOptions([]);
+    setCitiesLoading(true);
+    citiesForState(form.state)
+      .then(cities => {
+        if (active) setCityOptions(cities);
+      })
+      .finally(() => {
+        if (active) setCitiesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [form.state]);
+
+  const notify = (type, msg) => setNotice(`${type}|${msg}`);
+
+  const stepFields = {
+    1: ['company', 'pan'],
+    2: ['address1', 'country', 'state', 'city', 'postal'],
+    3: ['contact', 'email', 'phone'],
+  };
+
+  function validateField(k) {
+    const v = (form[k] || '').trim();
+    let e = '';
+
+    if (['company', 'address1', 'country', 'city', 'contact', 'email'].includes(k) && !v) {
+      e = 'This field is required.';
+    }
+    if (k === 'company' && v && !/^[\p{L}\p{N}&.,'()\- ]{2,150}$/u.test(v.replace(/\s+/g, ' '))) {
+      e = 'Use 2–150 characters, with common business punctuation.';
+    }
+    if (k === 'pan' && v && !/^[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}[A-Z]$/i.test(v)) {
+      e = 'Enter a valid 10-character Indian PAN.';
+    }
+    if (k === 'state' && !INDIAN_STATES.some(s => s.name === v)) {
+      e = 'Select an Indian state or Union Territory.';
+    }
+    if (k === 'contact' && v && !/^[\p{L}][\p{L} .'-]{1,99}$/u.test(v)) {
+      e = 'Enter a valid full name using letters and standard punctuation.';
+    }
+    if (k === 'email' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+      e = 'Enter a valid corporate email address.';
+    }
+    if (k === 'city' && !cityOptions.includes(v)) {
+      e = 'Select a valid city in the chosen Indian state or Union Territory.';
+    }
+    if (k === 'postal' && !/^\d{6}$/.test(v)) {
+      e = 'Enter an exact 6-digit PIN Code.';
+    }
+    if (k === 'phone' && v && !normalizeIndianPhone(v)) {
+      e = 'Enter a valid 10-digit Indian phone number.';
+    }
     return e;
   }
-  function validateStep(n){const next={};for(const k of stepFields[n]){const e=validateField(k);if(e)next[k]=e}setErrors(old=>({...old,...Object.fromEntries(stepFields[n].map(k=>[k,next[k]]).filter(([,v])=>!v)),...next}));return Object.keys(next).length===0}
-  function moveStep(dir){if(dir>0&&!validateStep(step))return;setStep(s=>Math.min(3,Math.max(1,s+dir)));setErrors({})}
-  async function startVerify(){const normalized={...form,country:'India',company:form.company.trim().replace(/\s+/g,' '),pan:form.pan.trim().toUpperCase(),msme:form.msme.trim().toUpperCase(),email:form.email.trim().toLowerCase(),contact:titleCaseName(form.contact.trim().replace(/\s+/g,' ')),address1:form.address1.trim().replace(/\s+/g,' '),postal:form.postal.trim()};normalized.phone=normalized.phone.trim()?normalizeIndianPhone(normalized.phone)||normalized.phone:'';
-    setForm(normalized);const allErrors={};for(const n of [1,2,3])for(const k of stepFields[n]){const e=validateField(k);if(e)allErrors[k]=e}setErrors(allErrors);if(Object.keys(allErrors).length){setStep(Object.keys(allErrors).some(k=>stepFields[1].includes(k))?1:Object.keys(allErrors).some(k=>stepFields[2].includes(k))?2:3);return}
-    if(apiMode){setBusy(true);try{const result=await api.register({companyName:normalized.company,pan:normalized.pan,msme:normalized.msme,address1:normalized.address1,address2:normalized.address2,country:'India',countryCode:'IN',state:normalized.state,city:normalized.city,postal:normalized.postal,contactName:normalized.contact,email:normalized.email,phone:normalized.phone});const pending={id:result.registrationId,email:normalized.email};setPendingRegistration(pending);setEmailDeliveryFailed(result.emailDelivery!=='sent');setOtpExpiry(Date.now()+300000);setCooldown(60);setAttempts(0);setResends(0);go('/verify-email');if(result.emailDelivery!=='sent')notify('error',result.message)}catch(error){notify('error',error.message)}finally{setBusy(false)}return}
-    const existing=readStore('osf-demo-account');if(existing?.email===normalized.email){notify('error','This email is already registered in this browser demo.');setStep(3);return}
-    const generated=String(100000+secureRandomInt(900000));setOtp(generated);setOtpExpiry(Date.now()+300000);setCooldown(60);setResends(0);setAttempts(0);setShowOtp(true);localStorage.setItem('osf-demo-profile',JSON.stringify(normalized));go('/verify-email');
-  }
-  async function resendOtp(){if(apiMode){if(cooldown>0)return notify('error','Please wait before requesting another code.');setBusy(true);try{const result=await api.resendOtp(pendingRegistration.id);setCooldown(60);setOtpExpiry(Date.now()+300000);setEmailDeliveryFailed(false);notify('success',result.message)}catch(error){setCooldown(60);notify('error',error.message)}finally{setBusy(false)}return}if(cooldown>0||resends>=5){notify('error',resends>=5?'Demo resend limit reached.':'Please wait before requesting another code.');return}setOtp(String(100000+secureRandomInt(900000)));setOtpExpiry(Date.now()+300000);setCooldown(60);setResends(n=>n+1);setAttempts(0);setShowOtp(true);notify('success','A new demo code is ready. The previous code is invalid.')}
-  const [otpInput,setOtpInput]=useState('');
-  async function submitOtp(){if(!/^\d{6}$/.test(otpInput))return notify('error','Enter the six-digit code.');if(apiMode){if(!pendingRegistration)return notify('error','Registration details were not found. Start registration again.');setBusy(true);try{const result=await api.verifyEmail(pendingRegistration.id,otpInput);setOtpInput('');if(result.emailDelivery==='sent'){setPendingRegistration(null);setLoginId(result.userId);go('/login');notify('success',result.message)}else{setVerifiedRegistration(result);notify('error',result.message)}}catch(error){notify('error',error.message)}finally{setBusy(false)}return}if(Date.now()>otpExpiry)return notify('error','This code has expired. Request a new one.');if(attempts>=5)return notify('error','Too many attempts. Request a new code.');if(otpInput!==otp){setAttempts(n=>n+1);return notify('error',`That code did not match. ${4-attempts} attempts remaining.`)}
-    const userId=`OSF-${100000+secureRandomInt(900000)}`,randomPassword=new Uint8Array(8);crypto.getRandomValues(randomPassword);const temporary=`Osf!${Array.from(randomPassword,b=>b.toString(36)).join('').slice(0,7)}A1`;
-    setCredential(temporary);setAccount({profile:form,email:form.email,userId,mustChangePassword:true,verifiedAt:new Date().toISOString(),registeredAt:new Date().toISOString(),passwordChangedAt:null,activity:['Company registration completed','Email address verified']});setOtp('');setOtpInput('');setShowOtp(false);setLoginId(userId);setLoginPassword(temporary);go('/login');setModal('credentials');
-  }
-  async function login(){if(!loginId.trim()||!loginPassword)return notify('error','Enter your User ID and password.');setBusy(true);try{if(apiMode){const result=await api.login(loginId.trim(),loginPassword);const profile=await api.profile();setSession({userId:result.userId});setAccount({userId:result.userId,profile:toUiProfile(profile.company),activity:[]});go('/dashboard')}else{await new Promise(resolve=>setTimeout(resolve,350));if(!account||loginId.trim().toUpperCase()!==account.userId||loginPassword!==credential){notify('error','The User ID or password is incorrect.');return}setSession({userId:account.userId,createdAt:new Date().toISOString()});setAccount(a=>({...a,activity:[...a.activity,'First login']}));if(account.mustChangePassword){go('/change-password');setModal('mandatory')}else go('/dashboard')}}catch(error){notify('error',error.message)}finally{setBusy(false)}}
-  async function changePassword(){if(apiMode){setBusy(true);try{const result=await api.changePassword({currentPassword,newPassword,confirmation:confirmPassword});setCurrentPassword('');setNewPassword('');setConfirmPassword('');go('/dashboard');notify(result.notification==='sent'?'success':'error',result.notification==='sent'?'Password changed. A confirmation email was sent.':'Password changed, but the confirmation email could not be sent.')}catch(error){notify('error',error.message)}finally{setBusy(false)}return}const r=PASSWORD_RULES,problems=[];if(currentPassword!==credential)problems.push('Current password is incorrect.');if(newPassword.length<r.min||!r.upper.test(newPassword)||!r.lower.test(newPassword)||!r.number.test(newPassword)||!r.special.test(newPassword))problems.push('Use at least 12 characters with uppercase, lowercase, a number and a special character.');if(newPassword===currentPassword)problems.push('Your new password must be different from the current password.');if(confirmPassword!==newPassword)problems.push('Passwords do not match.');if(problems.length)return notify('error',problems[0]);setCredential(newPassword);setAccount(a=>({...a,mustChangePassword:false,passwordChangedAt:new Date().toISOString(),activity:[...a.activity,'Password changed']}));setCurrentPassword('');setNewPassword('');setConfirmPassword('');setModal('password-confirmation');go('/dashboard')}
-  async function completeSetup(){const token=new URLSearchParams(location.search).get('token');if(!token){setSetupLinkError('This password setup link is invalid or expired. Request a new setup email from the sign-in page.');return}setBusy(true);setSetupLinkError('');try{const result=await api.setupPassword(token,setupPassword,setupConfirmation);setSetupPassword('');setSetupConfirmation('');setLoginId(result.userId);setPendingRegistration(null);go('/login');notify('success','Password created. Sign in with your OSF User ID.')}catch(error){if(error.status===410)setSetupLinkError('This password setup link is invalid, expired or already used. Request a new setup email from the sign-in page.');else notify('error',error.message)}finally{setBusy(false)}}
-  async function requestSetupRecovery(){if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setupEmail.trim())){setSetupRecoveryState('failure');setSetupRecoveryMessage('Enter the registered company email address.');return}if(setupRecoveryCooldown>0)return;setSetupRecoveryState('sending');setSetupRecoveryMessage('');try{if(!apiMode)throw new Error('Password setup recovery is only available for server accounts.');const result=await api.resendPasswordSetup(setupEmail.trim());setSetupRecoveryState('success');setSetupRecoveryMessage(result.message);setSetupRecoveryCooldown(60)}catch(error){if(error.status===429){const wait=error.retryAfter||60;setSetupRecoveryState('cooldown');setSetupRecoveryCooldown(wait);setSetupRecoveryMessage(`Please wait ${wait} seconds before trying again.`)}else{setSetupRecoveryState('failure');setSetupRecoveryMessage(error.message||'We could not submit your request. Check your connection and try again.')}}}
-  async function resendSetup(){if(!pendingRegistration)return notify('error','Registration details were not found. Contact OSF support.');setBusy(true);try{const result=await api.resendSetup(pendingRegistration.id);setVerifiedRegistration(null);notify('success',result.message)}catch(error){notify('error',error.message)}finally{setBusy(false)}}
-  async function logout(){if(apiMode){try{await api.logout()}catch(error){notify('error','Could not confirm logout with the server. Your session is still active; try again.');return}setAccount(null)}setSession(null);go('/login');setLoginPassword('');notify('success','You have been logged out.')}
-  const fmtDate=d=>d?new Intl.DateTimeFormat('en-IN',{day:'numeric',month:'short',year:'numeric'}).format(new Date(d)):'—';
-  const isDashboard=page.startsWith('/dashboard');
-  const progress=['Company details','Business location','Contact information'];
-  return <div className={`app-shell ${isDashboard?'dashboard-shell':''}`}>
-    {!isDashboard&&<aside className="brand-panel">
-      <div className="brand-content"><img src="/osf-logo.png" alt="Our Startup Freelancer — Build, Launch, Scale" className="brand-logo"/><div className="brand-kicker">COMPANY REGISTRATION</div><h1>Good things<br/>start <span>here.</span></h1><p>Join a community built to help ambitious companies move forward.</p><div className="brand-rule"></div><div className="brand-points"><div><ShieldCheck size={17}/><span>A clear, guided registration</span></div><div><Globe2 size={17}/><span>For companies across India</span></div></div></div>
-      <div className="brand-footer"><span>OUR STARTUP FREELANCER</span><span>BUILD · LAUNCH · SCALE</span></div>
-    </aside>}
-    <main className="main-panel">{!isDashboard&&<header className="topbar"><a className="mobile-logo" href="/register" onClick={e=>{e.preventDefault();go('/register')}}><img src="/osf-logo.png" alt="OSF"/></a><div className="topbar-spacer"/><button className="contact-nav-link" onClick={()=>go('/contact')}>Contact Us</button><button className="theme-toggle" onClick={()=>setDark(v=>!v)} aria-label={`Switch to ${dark?'light':'dark'} mode`}>{dark?<Sun size={17}/>:<Moon size={17}/>}<span>{dark?'Light':'Dark'} mode</span></button></header>}
-    <div className="page-area">
-      {page==='/register'&&<section className="form-wrap wide"><div className="eyebrow">GET STARTED <span>·</span> COMPANY ACCOUNT</div><h2>Create your company account</h2><p className="page-lead">Tell us a little about your business. It only takes a few minutes.</p>
-        <div className="steps" aria-label="Registration progress">{progress.map((label,i)=><button key={label} className={`step ${step===i+1?'active':''} ${step>i+1?'done':''}`} onClick={()=>i+1<step&&setStep(i+1)}><span className="step-mark">{step>i+1?<Check size={14}/>:`0${i+1}`}</span><span className="step-label">{label}</span></button>)}</div>
-        {step===1&&<><div className="section-head"><span className="section-icon"><Building2 size={17}/></span><div><h3>Company details</h3><p>Start with your company’s registered information.</p></div></div><div className="field-grid"><Field label="Company name" required error={errors.company}><input value={form.company} maxLength={150} placeholder="e.g. Northstar Technologies" onChange={e=>update('company',e.target.value)} onBlur={()=>setErrors(x=>({...x,company:validateField('company')}))}/></Field><Field label="Company PAN ID" hint="Optional · 10-character Indian PAN" error={errors.pan}><input value={form.pan} maxLength={10} placeholder="ABCDE1234F" onChange={e=>update('pan',e.target.value.toUpperCase())}/></Field><Field label="MSME registration" hint="Optional"><input value={form.msme} placeholder="Enter MSME registration, if applicable" onChange={e=>update('msme',e.target.value.toUpperCase())}/></Field></div></>}
-        {step===2&&<><div className="section-head"><span className="section-icon"><MapPin size={17}/></span><div><h3>Business location</h3><p>Register an Indian company address.</p></div></div><div className="field-grid"><Field label="Address line 1" required error={errors.address1}><input value={form.address1} placeholder="Street address, building, suite" onChange={e=>update('address1',e.target.value)}/></Field><Field label="Address line 2" hint="Optional"><input value={form.address2} placeholder="Apartment, floor, landmark" onChange={e=>update('address2',e.target.value)}/></Field><Field label="Country" hint="OSF registration is currently available for India only"><input value="India" readOnly aria-readonly="true"/></Field><Field label="State / Union Territory" required error={errors.state}><select value={form.state} onChange={e=>{update('state',e.target.value);update('city','')}}><option value="">Select state or Union Territory</option>{INDIAN_STATES.map(state=><option key={state.isoCode} value={state.name}>{state.name}</option>)}</select></Field><Field label="City" required error={errors.city}><select value={form.city} disabled={!form.state||citiesLoading} onChange={e=>update('city',e.target.value)}><option value="">{citiesLoading?'Loading cities…':'Select city'}</option>{cityOptions.map((city,i)=><option key={`${city}-${i}`} value={city}>{city}</option>)}</select></Field><Field label="PIN Code" required hint="Exactly 6 digits" error={errors.postal}><input inputMode="numeric" maxLength={6} value={form.postal} placeholder="6-digit PIN Code" onChange={e=>update('postal',e.target.value)}/></Field></div></>}
-        {step===3&&<><div className="section-head"><span className="section-icon"><UserRound size={17}/></span><div><h3>Contact information</h3><p>Who should we contact about this company account?</p></div></div><div className="field-grid"><Field label="Contact person full name" required error={errors.contact}><input value={form.contact} placeholder="e.g. Aanya Sharma" onChange={e=>update('contact',e.target.value)}/></Field><Field label="Company email" required hint="We’ll send a verification code to this address." error={errors.email}><input type="email" value={form.email} placeholder="you@company.com" onChange={e=>update('email',e.target.value)}/></Field><Field label="Indian phone number" hint="Optional · +91 numbers only" error={errors.phone}><div className="phone-row profile-phone"><span className="dial-code">+91</span><input type="tel" inputMode="tel" autoComplete="tel-national" value={form.phone} placeholder="10-digit Indian number" onChange={e=>update('phone',e.target.value)}/></div></Field></div><div className="review-box"><div className="review-title"><FileCheck2 size={16}/> Review before continuing</div><div className="review-grid"><span>Company</span><strong>{form.company||'—'}</strong><span>Location</span><strong>{[form.city,form.state,'India'].filter(Boolean).join(', ')||'—'}</strong><span>Contact</span><strong>{form.contact||'—'} · {form.email||'—'}</strong></div><p className="privacy-note"><ShieldCheck size={14}/> Your details are used to set up your OSF company profile.</p></div></>}
-        <div className="form-actions">{step>1?<button className="btn btn-outline" onClick={()=>moveStep(-1)}><ArrowLeft size={16}/> Back</button>:<span className="secure-note"><ShieldCheck size={15}/> Secure company registration</span>}{step<3?<button className="btn btn-primary" onClick={()=>moveStep(1)}>Continue <ArrowRight size={16}/></button>:<button className="btn btn-primary" onClick={startVerify} disabled={busy}>{busy?'Creating account…':<>Create company account <ArrowRight size={16}/></>}</button>}</div>
-        <div className="login-prompt">Already registered? <button onClick={()=>go('/login')}>Sign in</button></div>
-      </section>}
-      {page==='/verify-email'&&<section className="form-wrap narrow"><div className="round-icon"><Mail size={21}/></div><div className="eyebrow">ONE QUICK CHECK</div><h2>Verify your email</h2><p className="page-lead">We’ve sent a verification code to <strong>{maskEmail(pendingRegistration?.email||form.email)}</strong>.</p>{emailDeliveryFailed&&<div className="soft-alert warning"><CircleHelp size={16}/> Email delivery failed. Check Gmail settings, then request a new code.</div>}{verifiedRegistration?<><div className="soft-alert"><CheckCircle2 size={16}/> Email verified for User ID <strong>{verifiedRegistration.userId}</strong>. A password setup link is required to finish.</div><button className="btn btn-primary full" disabled={busy||cooldown>0} onClick={resendSetup}>{busy?'Sending…':cooldown>0?`Try again in ${cooldown}s`:'Send password setup link'} <ArrowRight size={16}/></button></>:<><Field label="6-digit verification code"><input className="otp-input" maxLength={6} inputMode="numeric" autoComplete="one-time-code" value={otpInput} placeholder="• • • • • •" onChange={e=>setOtpInput(e.target.value.replace(/\D/g,'').slice(0,6))}/></Field><button className="btn btn-primary full" disabled={busy} onClick={submitOtp}>{busy?'Verifying…':'Verify email'} <ArrowRight size={16}/></button><div className="resend-line">{cooldown>0?<span><Clock3 size={14}/> Resend available in {cooldown}s</span>:<button disabled={busy} onClick={resendOtp}>Resend code</button>}<button onClick={()=>{setPendingRegistration(null);go('/register');setStep(3)}}>Change email</button></div></>}<div className="demo-footnote">Codes expire in 5 minutes. Resend cooldown: 60 seconds.</div></section>}
-      {page==='/set-password'&&<section className="form-wrap narrow"><div className="round-icon"><ShieldCheck size={21}/></div><div className="eyebrow">SECURE YOUR ACCOUNT</div><h2>Set your password</h2><p className="page-lead">Create a password to finish setting up your OSF company account.</p>{(setupLinkError||(!new URLSearchParams(location.search).get('token')&&'This password setup link is invalid or expired. Request a new setup email from the sign-in page.'))&&<div className="soft-alert warning" role="alert"><CircleHelp size={16}/>{setupLinkError||'This password setup link is invalid or expired. Request a new setup email from the sign-in page.'}<button onClick={()=>{setShowSetupRecovery(true);go('/login')}}>Go to sign in</button></div>}<Field label="New password" required><PasswordEntry value={setupPassword} onChange={setSetupPassword} autoComplete="new-password"/></Field><div className="password-rules">Use at least 12 characters, with uppercase and lowercase letters, a number and a special character.</div><Field label="Confirm password" required><PasswordEntry value={setupConfirmation} onChange={setSetupConfirmation} autoComplete="new-password"/></Field><button className="btn btn-primary full login-btn" disabled={busy||Boolean(setupLinkError)||!new URLSearchParams(location.search).get('token')} onClick={completeSetup}>{busy?'Saving…':'Create password'} <ArrowRight size={16}/></button></section>}
-      {authLoading&&((page.startsWith('/dashboard')&&page!=='/dashboard-preview')||page==='/change-password')&&<section className="form-wrap narrow loading-state" role="status"><span className="loading-spinner"/><p>Checking your session…</p></section>}
-      {page==='/login'&&<section className="form-wrap narrow"><div className="eyebrow">WELCOME BACK</div><h2>Sign in to OSF</h2><p className="page-lead">Access your company account and profile.</p>{!account&&!apiMode&&<div className="soft-alert"><CircleHelp size={16}/> This UI demo has no account yet. <button onClick={()=>go('/register')}>Register a company</button></div>}{!account&&apiMode&&<div className="soft-alert"><Mail size={16}/> Use the User ID and password you created from the emailed setup link.</div>}<Field label="User ID" required><input autoComplete="username" value={loginId} placeholder="e.g. OSF-123456" onChange={e=>setLoginId(e.target.value)}/></Field><Field label="Password" required><div className="password-wrap"><input autoComplete="current-password" type={showPassword?'text':'password'} value={loginPassword} placeholder="Enter your password" onChange={e=>setLoginPassword(e.target.value)}/><button type="button" aria-label={showPassword?'Hide password':'Show password'} onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div></Field><button className="btn btn-primary full login-btn" disabled={busy||authLoading} onClick={login}>{busy?<><span className="loading-spinner small"/>Signing in…</>:<>Sign in <ArrowRight size={16}/></>}</button><div className="login-prompt centered">New to OSF? <button onClick={()=>go('/register')}>Create a company account</button></div><div className="login-prompt centered dashboard-preview-link"><button onClick={()=>{setDashboardPreview(true);setDashTab('Overview');go('/dashboard-preview')}}>Preview dashboard with sample data</button></div>{apiMode&&<div className="login-prompt centered"><button onClick={()=>{setShowSetupRecovery(v=>!v);setSetupRecoveryState('idle');setSetupRecoveryMessage('')}}>Resend password setup email</button></div>}{showSetupRecovery&&<div className="setup-recovery"><h3>Resend password setup email</h3><p>Enter the registered company email address. We’ll send a link if the account is eligible.</p><Field label="Company email"><input type="email" autoComplete="email" value={setupEmail} placeholder="you@company.com" onChange={e=>setSetupEmail(e.target.value)}/></Field><button className="btn btn-outline full" disabled={setupRecoveryState==='sending'||setupRecoveryCooldown>0} onClick={requestSetupRecovery}>{setupRecoveryState==='sending'?'Sending…':setupRecoveryCooldown>0?`Try again in ${setupRecoveryCooldown}s`:'Send setup email'}</button>{setupRecoveryMessage&&<div className={`soft-alert ${setupRecoveryState==='failure'?'warning':''}`} role="status" aria-live="polite">{setupRecoveryState==='sending'?<span className="loading-spinner small"/>:setupRecoveryState==='failure'?<CircleHelp size={16}/>:<CheckCircle2 size={16}/>}<span>{setupRecoveryMessage}</span></div>}</div>}{!apiMode&&<div className="demo-footnote">This is a local UI demonstration. Authentication is simulated in this browser.</div>}</section>}
-      {page==='/change-password'&&<section className="form-wrap narrow"><div className="eyebrow">ACCOUNT SECURITY</div><h2>Change your password</h2><p className="page-lead">Update the password for your OSF company account.</p><Field label="Current password" required><PasswordEntry value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password"/></Field><Field label="New password" required><PasswordEntry value={newPassword} onChange={setNewPassword} autoComplete="new-password"/></Field><div className="password-rules">Use at least 12 characters, with uppercase and lowercase letters, a number and a special character.</div><Field label="Confirm new password" required><PasswordEntry value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password"/></Field><button className="btn btn-primary full login-btn" disabled={busy} onClick={changePassword}>{busy?'Saving…':'Save new password'} <ArrowRight size={16}/></button></section>}
-      {page==='/contact'&&<ContactUs onBack={session?()=>go('/dashboard'):null}/>}
-      {((page.startsWith('/dashboard')&&session)||page==='/dashboard-preview')&&<Dashboard account={dashboardPreview||page==='/dashboard-preview'?DASHBOARD_SAMPLE:account} preview={dashboardPreview||page==='/dashboard-preview'} tab={dashTab} setTab={setDashTab} go={dashboardPreview||page==='/dashboard-preview'?()=>go('/dashboard-preview'):go} logout={dashboardPreview||page==='/dashboard-preview'?()=>{setDashboardPreview(false);go('/login')}:logout} onProfileUpdated={company=>setAccount(current=>({...current,profile:toUiProfile(company)}))} date={fmtDate} dark={dark} setDark={setDark}/>}
-    </div>{!isDashboard&&<footer className="main-footer"><span>© {new Date().getFullYear()} Our Startup Freelancer</span><span>Company registration portal <span className="footer-dot">·</span> UI demo</span></footer>}</main>
-    {notice&&<div className={`toast ${notice.startsWith('error')?'toast-error':'toast-success'}`}>{notice.startsWith('error')?<X size={16}/>:<CheckCircle2 size={16}/>} {notice.split('|')[1]}</div>}
-    {modal&&<Modal title={modal==='otp-preview'?'Mock verification email':modal==='credentials'?'Your demo account is ready':modal==='mandatory'?'Password update required':'Password changed'} close={()=>setModal('')}><EmailPreview type={modal} form={form} account={account} otp={otp} loginPassword={loginPassword}/>{modal==='otp-preview'?<div className="modal-actions"><button className="btn btn-outline" onClick={()=>setModal('')}>Close</button><button className="btn btn-primary" onClick={()=>{setOtpInput(otp);setModal('')}}>Use this code <ArrowRight size={15}/></button></div>:modal==='credentials'?<div className="modal-actions"><button className="btn btn-primary" onClick={()=>{setModal('');go('/login')}}>Continue to sign in <ArrowRight size={15}/></button></div>:modal==='mandatory'?<div className="modal-actions"><button className="btn btn-primary" onClick={()=>setModal('')}>Set new password <ArrowRight size={15}/></button></div>:<div className="modal-actions"><button className="btn btn-primary" onClick={()=>setModal('')}>Continue to dashboard <ArrowRight size={15}/></button></div>}</Modal>}
-  </div>
-}
-function maskEmail(email=''){const [u,d='']=email.split('@');return u?`${u.slice(0,2)}${'•'.repeat(Math.max(2,u.length-2))}@${d}`:'your email'}
-function Field({label,required,hint,error,children}){return <label className={`field ${error?'has-error':''}`}><span className="field-label">{label}{required&&<i aria-hidden="true"> *</i>}{required&&<span className="sr-only"> required</span>}</span>{children}{error?<span className="field-error" role="alert">{error}</span>:hint?<span className="field-hint">{hint}</span>:null}</label>}
-function PasswordEntry({value,onChange,autoComplete}){const [visible,setVisible]=useState(false);return <div className="password-wrap"><input type={visible?'text':'password'} value={value} autoComplete={autoComplete} onChange={e=>onChange(e.target.value)}/><button type="button" aria-label={visible?'Hide password':'Show password'} onClick={()=>setVisible(v=>!v)}>{visible?<EyeOff size={16}/>:<Eye size={16}/>}</button></div>}
-function Modal({title,close,children}){return <div className="modal-backdrop" role="presentation" onClick={e=>e.target===e.currentTarget&&close()}><div className="modal" role="dialog" aria-modal="true" aria-label={title}><div className="modal-head"><div><div className="modal-kicker">OSF · DEMO</div><h3>{title}</h3></div><button className="icon-button" onClick={close} aria-label="Close dialog"><X size={18}/></button></div>{children}</div></div>}
-function EmailPreview({type,form,account,otp,loginPassword}){if(type==='otp-preview')return <div className="email-card"><div className="email-meta"><span>From</span><strong>OSF Admin · demo</strong><span>To</span><strong>{form.email}</strong><span>Subject</span><strong>Verify your company email · OSF</strong></div><div className="email-body"><div className="email-brand"><img src="/osf-logo.png" alt="OSF"/></div><p>Hello {form.contact||'there'},</p><p>Use the following one-time code to verify the email for <strong>{form.company||'your company'}</strong>.</p><div className="code-box">{otp||'------'}</div><p className="email-muted">This code expires in 5 minutes. If you did not start this registration, you can ignore this message.</p></div></div>;if(type==='credentials')return <div className="credential-card"><span className="credential-icon"><CheckCircle2 size={20}/></span><p>Your company email is verified. These demo credentials are available only in this browser.</p><div><span>User ID</span><strong>{account?.userId}</strong></div><div><span>Temporary password</span><strong>{loginPassword}</strong></div><div className="credential-note"><ShieldCheck size={14}/> You’ll be asked to create a new password after signing in.</div></div>;return <div className="simple-modal-copy"><p>{type==='mandatory'?'Your account is currently using a temporary password. For security reasons, you must create a new password before continuing.':'Your password was updated in this browser demo. A confirmation email was not sent.'}</p>{type==='password-confirmation'&&<div className="demo-notice compact"><CheckCircle2 size={17}/><div><strong>Demo confirmation</strong><p>No email was sent.</p></div></div>}</div>}
-function Dashboard({account,preview=false,tab,setTab,go,logout,onProfileUpdated,date,dark,setDark}){const [mobilePreview,setMobilePreview]=useState(false);const name=account?.profile?.contact||'Company representative',company=account?.profile?.company||'Your company';const menu=['Overview','Company Profile','Account Information','Activity'];return <div className={'dashboard-layout'+(mobilePreview?' mobile-preview':'')}><aside className="dash-sidebar" aria-label="Company workspace navigation"><img src="/osf-logo.png" alt="OSF" className="dash-logo"/><div className="dash-nav-label">WORKSPACE</div>{menu.map((x,i)=><button key={x} className={`dash-nav ${tab===x?'selected':''}`} onClick={()=>{setTab(x);if(x==='Company Profile')go('/dashboard/company');else if(x==='Account Information')go('/dashboard/account');else go('/dashboard')}}>{[<LayoutDashboard/>,<Building2/>,<UserRound/>,<Clock3/>][i]}{x}</button>)}<div className="dash-sidebar-bottom"><button className="dash-nav" onClick={logout}><LogOut size={17}/>Log out</button><div className="sidebar-user"><span className="avatar">{name.slice(0,1)}</span><div><strong>{name}</strong><small>{account?.userId}</small></div><MoreHorizontal size={17}/></div></div></aside><section className="dash-main"><header className="dash-top"><a className="dash-brand" href="/dashboard" onClick={e=>{e.preventDefault();go('/dashboard')}}><img src="/osf-logo.png" alt="OSF"/><span>COMPANY WORKSPACE<small>OUR STARTUP FREELANCER</small></span></a>{preview&&<span className="preview-badge">SAMPLE DATA</span>}<nav className="dashboard-nav" aria-label="Company workspace navigation">{menu.map((item,index)=><button key={item} className={tab===item?'dashboard-tab selected':'dashboard-tab'} onClick={()=>{setTab(item);go(item==='Company Profile'?'/dashboard/company':item==='Account Information'?'/dashboard/account':item==='Activity'?'/dashboard/activity':'/dashboard')}}>{[<LayoutDashboard/>,<Building2/>,<UserRound/>,<Clock3/>][index]}<span>{item}</span></button>)}</nav><button className="contact-nav-link dashboard-contact-link" onClick={()=>go('/contact')}>Contact Us</button><div className="dash-tools"><div className="view-switch" role="group" aria-label="Dashboard preview size"><button className={!mobilePreview?'active':''} aria-pressed={!mobilePreview} onClick={()=>setMobilePreview(false)}>Desktop</button><button className={mobilePreview?'active':''} aria-pressed={mobilePreview} onClick={()=>setMobilePreview(true)}>Mobile</button></div><button className="theme-toggle" onClick={()=>setDark(v=>!v)} aria-label={`Switch to ${dark?'light':'dark'} mode`}>{dark?<Sun size={16}/>:<Moon size={16}/>}<span>{dark?'Light':'Dark'} mode</span></button><span className="dash-account-name"><span className="avatar small">{name.slice(0,1)}</span>{name.split(' ')[0]}</span><button className="dash-signout" onClick={logout}><LogOut size={16}/><span>Sign out</span></button></div></header><div className="dash-content">{tab==='Overview'?<><div className="dashboard-eyebrow">COMPANY WORKSPACE <span>·</span> OVERVIEW</div><div className="welcome-row"><div><h1>Welcome, {name.split(' ')[0]}</h1><p>Here’s an overview of your company account.</p></div><span className="verified-pill"><CheckCircle2 size={15}/> Email verified</span></div><div className="status-banner"><span className="status-icon"><Check size={17}/></span><div><strong>Your company account is set up</strong><p>{company} is registered with OSF. Your profile details are ready to view.</p></div><button onClick={()=>{setTab('Company Profile');go('/dashboard/company')}}>View profile <ArrowRight size={15}/></button></div><div className="dash-grid"><div className="dash-card overview-card"><div className="card-heading"><div><h3>Company overview</h3><p>Your registration details</p></div><button className="text-link" onClick={()=>{setTab('Company Profile');go('/dashboard/company')}}>View profile <ArrowRight size={14}/></button></div><div className="overview-data"><div className="company-monogram">{company.slice(0,1).toUpperCase()}</div><div><h4>{company}</h4><span>Company account</span></div></div><div className="data-rows"><DataRow label="Registered email" value={account?.profile?.email}/><DataRow label="Country" value={account?.profile?.country}/><DataRow label="Registered" value={date(account?.registeredAt)}/></div></div><div className="dash-card account-card"><div className="card-heading"><div><h3>Account status</h3><p>Your account is in good standing</p></div><span className="status-dot"/></div><StatusRow label="Email verification" value="Verified" good/><StatusRow label="Account status" value="Active" good/><StatusRow label="Password setup" value="Complete" good/><div className="account-foot"><ShieldCheck size={15}/> Your account is ready to use</div></div></div><div className="dash-card activity-card"><div className="card-heading"><div><h3>Recent activity</h3><p>Updates from your company account</p></div><button className="text-link" onClick={()=>{setTab('Activity');go('/dashboard/activity')}}>View activity <ArrowRight size={14}/></button></div><div className="activity-list">{(account?.activity||[]).length?(account.activity.slice().reverse().map((x,i)=><div className="activity-item" key={`${x}-${i}`}><span className="activity-check"><Check size={13}/></span><div><strong>{x}</strong><small>{date(i===0?account?.passwordChangedAt||account?.verifiedAt:account?.registeredAt)}</small></div></div>)):<div className="empty-state"><span className="empty-state-icon"><Clock3 size={18}/></span><div><strong>No recent activity</strong><p>Account updates will appear here when they are available.</p></div></div>}</div></div><div className="quick-links"><button onClick={()=>{setTab('Company Profile');go('/dashboard/company')}}><span><Building2 size={17}/></span><div><strong>Company profile</strong><small>Review your registered company information</small></div><ArrowRight size={16}/></button><button onClick={()=>{setTab('Account Information');go('/dashboard/account')}}><span><UserRound size={17}/></span><div><strong>Account information</strong><small>View representative and sign-in details</small></div><ArrowRight size={16}/></button></div></>:<><div className="dashboard-eyebrow">COMPANY WORKSPACE <span>·</span> {tab.toUpperCase()}</div><div className="welcome-row"><div><h1>{tab}</h1><p>{tab==='Company Profile'?'Registered details for your company.':tab==='Activity'?'A timeline of updates in your company account.':'Account and representative information.'}</p></div>{tab==='Company Profile'&&<span className="verified-pill"><CheckCircle2 size={15}/> Verified</span>}</div>{tab==='Company Profile'?<CompanyProfile profile={account.profile} readOnly={preview} onSaved={onProfileUpdated}/>:tab==='Activity'?<div className="dash-card activity-card"><div className="activity-list">{(account?.activity||[]).slice().reverse().map((x,i)=><div className="activity-item" key={`${x}-${i}`}><span className="activity-check"><Check size={13}/></span><div><strong>{x}</strong><small>{date(i===0?account?.passwordChangedAt||account?.verifiedAt:account?.registeredAt)}</small></div></div>)}</div></div>:<div className="dash-card detail-card"><h3>Account information</h3><p className="detail-sub">Your OSF sign-in and verification details</p><div className="detail-grid"><DataRow label="User ID" value={account?.userId}/><DataRow label="Registered email" value={account?.profile?.email}/><DataRow label="Email status" value="Verified"/><DataRow label="Account status" value="Active"/><DataRow label="Password changed" value={date(account?.passwordChangedAt)}/><DataRow label="Member since" value={date(account?.registeredAt)}/></div></div>}</>}</div></section></div>}
-function DataRow({label,value}){return <div className="data-row"><span>{label}</span><strong>{value||'—'}</strong></div>}
-function StatusRow({label,value,good}){return <div className="status-row"><span>{label}</span><strong className={good?'good':''}>{good&&<CheckCircle2 size={15}/>} {value}</strong></div>}
 
-createRoot(document.getElementById('root')).render(<App/>);
+  function validateStep(n) {
+    const next = {};
+    for (const k of stepFields[n]) {
+      const e = validateField(k);
+      if (e) next[k] = e;
+    }
+    setErrors(old => ({
+      ...old,
+      ...Object.fromEntries(stepFields[n].map(k => [k, next[k]]).filter(([, val]) => !val)),
+      ...next,
+    }));
+    return Object.keys(next).length === 0;
+  }
+
+  function moveStep(dir) {
+    if (dir > 0 && !validateStep(step)) return;
+    setStep(s => Math.min(3, Math.max(1, s + dir)));
+    setErrors({});
+  }
+
+  async function startVerify() {
+    const normalized = {
+      ...form,
+      country: 'India',
+      company: form.company.trim().replace(/\s+/g, ' '),
+      pan: form.pan.trim().toUpperCase(),
+      msme: form.msme.trim().toUpperCase(),
+      email: form.email.trim().toLowerCase(),
+      contact: titleCaseName(form.contact.trim().replace(/\s+/g, ' ')),
+      address1: form.address1.trim().replace(/\s+/g, ' '),
+      postal: form.postal.trim(),
+    };
+    normalized.phone = normalized.phone.trim() ? normalizeIndianPhone(normalized.phone) || normalized.phone : '';
+
+    setForm(normalized);
+    const allErrors = {};
+    for (const n of [1, 2, 3]) {
+      for (const k of stepFields[n]) {
+        const e = validateField(k);
+        if (e) allErrors[k] = e;
+      }
+    }
+    setErrors(allErrors);
+    if (Object.keys(allErrors).length) {
+      setStep(
+        Object.keys(allErrors).some(k => stepFields[1].includes(k))
+          ? 1
+          : Object.keys(allErrors).some(k => stepFields[2].includes(k))
+          ? 2
+          : 3
+      );
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const result = await api.register({
+        companyName: normalized.company,
+        pan: normalized.pan,
+        msme: normalized.msme,
+        address1: normalized.address1,
+        address2: normalized.address2,
+        country: 'India',
+        countryCode: 'IN',
+        state: normalized.state,
+        city: normalized.city,
+        postal: normalized.postal,
+        contactName: normalized.contact,
+        email: normalized.email,
+        phone: normalized.phone,
+      });
+
+      const pending = { id: result.registrationId, email: normalized.email };
+      setPendingRegistration(pending);
+      setEmailDeliveryFailed(result.emailDelivery !== 'sent');
+      setOtpExpiry(Date.now() + 300000);
+      setCooldown(60);
+      go('/verify-email');
+      if (result.emailDelivery !== 'sent') {
+        notify('error', result.message || 'Email delivery failed. Check SMTP configuration.');
+      } else {
+        notify('success', 'Verification code sent to your email.');
+      }
+    } catch (error) {
+      notify('error', error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendOtp() {
+    if (!pendingRegistration) return notify('error', 'Registration details not found. Please register again.');
+    if (cooldown > 0) return notify('error', `Please wait ${cooldown} seconds before requesting another code.`);
+    setBusy(true);
+    try {
+      const result = await api.resendOtp(pendingRegistration.id);
+      setCooldown(60);
+      setOtpExpiry(Date.now() + 300000);
+      setEmailDeliveryFailed(false);
+      notify('success', result.message || 'A fresh verification code has been dispatched.');
+    } catch (error) {
+      setCooldown(60);
+      notify('error', error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitOtp() {
+    if (!/^\d{6}$/.test(otpInput)) return notify('error', 'Enter a complete 6-digit verification code.');
+    if (!pendingRegistration) return notify('error', 'Registration session expired. Please start again.');
+
+    setBusy(true);
+    try {
+      const result = await api.verifyEmail(pendingRegistration.id, otpInput);
+      setOtpInput('');
+      if (result.emailDelivery === 'sent') {
+        setPendingRegistration(null);
+        setLoginId(result.userId);
+        go('/login');
+        notify('success', result.message || 'Email verified successfully! Sign in to continue.');
+      } else {
+        setVerifiedRegistration(result);
+        notify('error', result.message || 'Verification complete, but password setup link delivery failed.');
+      }
+    } catch (error) {
+      notify('error', error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function login() {
+    if (!loginId.trim() || !loginPassword) return notify('error', 'Please enter both your User ID and password.');
+    setBusy(true);
+    try {
+      const result = await api.login(loginId.trim(), loginPassword);
+      const profile = await api.profile();
+      setSession({ userId: result.userId });
+      setAccount({
+        userId: result.userId,
+        profile: toUiProfile(profile.company),
+        activity: [],
+      });
+      go('/dashboard');
+      notify('success', 'Welcome back to your workspace.');
+    } catch (error) {
+      notify('error', error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changePassword() {
+    setBusy(true);
+    try {
+      const result = await api.changePassword({
+        currentPassword,
+        newPassword,
+        confirmation: confirmPassword,
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      go('/dashboard');
+      notify(
+        result.notification === 'sent' ? 'success' : 'error',
+        result.notification === 'sent'
+          ? 'Password updated. A security notification was emailed.'
+          : 'Password updated, but confirmation notification could not be dispatched.'
+      );
+    } catch (error) {
+      notify('error', error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function completeSetup() {
+    const token = new URLSearchParams(location.search).get('token');
+    if (!token) {
+      setSetupLinkError('This password setup link is invalid or expired. Request a new setup link from sign-in.');
+      return;
+    }
+    setBusy(true);
+    setSetupLinkError('');
+    try {
+      const result = await api.setupPassword(token, setupPassword, setupConfirmation);
+      setSetupPassword('');
+      setSetupConfirmation('');
+      setLoginId(result.userId);
+      setPendingRegistration(null);
+      go('/login');
+      notify('success', 'Password created successfully! Please sign in with your User ID.');
+    } catch (error) {
+      if (error.status === 410) {
+        setSetupLinkError('This setup link has expired or has already been used. Please request a new setup link.');
+      } else {
+        notify('error', error.message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function requestSetupRecovery() {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setupEmail.trim())) {
+      setSetupRecoveryState('failure');
+      setSetupRecoveryMessage('Please enter a valid registered corporate email address.');
+      return;
+    }
+    if (setupRecoveryCooldown > 0) return;
+    setSetupRecoveryState('sending');
+    setSetupRecoveryMessage('');
+    try {
+      const result = await api.resendPasswordSetup(setupEmail.trim());
+      setSetupRecoveryState('success');
+      setSetupRecoveryMessage(result.message || 'If an active account exists, a setup link has been dispatched.');
+      setSetupRecoveryCooldown(60);
+    } catch (error) {
+      if (error.status === 429) {
+        const wait = error.retryAfter || 60;
+        setSetupRecoveryState('cooldown');
+        setSetupRecoveryCooldown(wait);
+        setSetupRecoveryMessage(`Rate limit active. Please wait ${wait} seconds before retrying.`);
+      } else {
+        setSetupRecoveryState('failure');
+        setSetupRecoveryMessage(error.message || 'Unable to process request. Check your connection.');
+      }
+    }
+  }
+
+  async function resendSetup() {
+    if (!pendingRegistration) return notify('error', 'Registration details not found.');
+    setBusy(true);
+    try {
+      const result = await api.resendSetup(pendingRegistration.id);
+      setVerifiedRegistration(null);
+      notify('success', result.message || 'A new password setup link has been sent to your email.');
+    } catch (error) {
+      notify('error', error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function logout() {
+    try {
+      await api.logout();
+    } catch (error) {
+      notify('error', 'Logout request could not be confirmed with server. Please try again.');
+      return;
+    }
+    setAccount(null);
+    setSession(null);
+    go('/login');
+    setLoginPassword('');
+    notify('success', 'You have been securely signed out.');
+  }
+
+  const fmtDate = d =>
+    d
+      ? new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(d))
+      : '—';
+
+  const isDashboard = page.startsWith('/dashboard');
+  const progressLabels = ['Company Details', 'Business Location', 'Contact Information'];
+
+  return (
+    <div className={`app-shell ${isDashboard ? 'dashboard-shell' : ''}`}>
+      {/* Desktop Brand Panel for Registration & Auth */}
+      {!isDashboard && (
+        <aside className="brand-panel">
+          <div className="brand-content">
+            <div className="brand-logo-frame">
+              <img src="/osf-logo.png" alt="Our Startup Freelancer (OSF)" />
+            </div>
+            <div className="brand-kicker">COMPANY REGISTRATION</div>
+            <h1>
+              Good things<br />
+              start <span>here.</span>
+            </h1>
+            <p className="brand-desc">
+              Join a dedicated enterprise platform built to help ambitious Indian companies register, build, and scale.
+            </p>
+
+            <div className="brand-features">
+              <div className="brand-feature-item">
+                <span className="brand-feature-icon">
+                  <Icon name="ShieldCheck" size={17} />
+                </span>
+                <span>Structured, verified business onboarding</span>
+              </div>
+              <div className="brand-feature-item">
+                <span className="brand-feature-icon">
+                  <Icon name="Globe2" size={17} />
+                </span>
+                <span>Dedicated for enterprises across India</span>
+              </div>
+              <div className="brand-feature-item">
+                <span className="brand-feature-icon">
+                  <Icon name="Building2" size={17} />
+                </span>
+                <span>Compliant profiles & secure session access</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="brand-footer">
+            <span>OUR STARTUP FREELANCER</span>
+            <span>BUILD · LAUNCH · SCALE</span>
+          </div>
+        </aside>
+      )}
+
+      {/* Main Panel */}
+      <main className="main-panel">
+        {!isDashboard && (
+          <header className="topbar">
+            <a
+              className="mobile-logo"
+              href="/register"
+              onClick={e => {
+                e.preventDefault();
+                go('/register');
+              }}
+            >
+              <img src="/osf-logo.png" alt="OSF Logo" />
+            </a>
+            <div className="topbar-actions">
+              <button className="contact-nav-link" onClick={() => go('/contact')}>
+                Contact Us
+              </button>
+              <button
+                className="theme-toggle"
+                onClick={() => setDark(v => !v)}
+                aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`}
+              >
+                {dark ? <Icon name="Sun" size={16} /> : <Icon name="Moon" size={16} />}
+                <span>{dark ? 'Light' : 'Dark'} Mode</span>
+              </button>
+            </div>
+          </header>
+        )}
+
+        <div className="page-area">
+          {/* REGISTRATION PAGE */}
+          {page === '/register' && (
+            <section className="form-wrap wide">
+              <div className="eyebrow">GET STARTED · COMPANY ACCOUNT</div>
+              <h2>Create your company account</h2>
+              <p className="page-lead">Complete three simple steps to register your business on OSF.</p>
+
+              {/* 3-Step Progress Stepper */}
+              <div className="stepper" aria-label="Registration Progress">
+                {progressLabels.map((label, i) => (
+                  <button
+                    key={label}
+                    className={`step-node ${step === i + 1 ? 'active' : ''} ${step > i + 1 ? 'done' : ''}`}
+                    onClick={() => i + 1 < step && setStep(i + 1)}
+                    disabled={i + 1 > step}
+                    aria-current={step === i + 1 ? 'step' : undefined}
+                  >
+                    <span className="step-circle">
+                      {step > i + 1 ? <Icon name="Check" size={16} /> : `0${i + 1}`}
+                    </span>
+                    <span className="step-label">{label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Step 1: Company Details */}
+              {step === 1 && (
+                <>
+                  <div className="section-banner">
+                    <span className="section-icon-box">
+                      <Icon name="Building2" size={18} />
+                    </span>
+                    <div>
+                      <h3>Company Details</h3>
+                      <p>Start with your organization’s legal registered entity details.</p>
+                    </div>
+                  </div>
+
+                  <div className="field-grid">
+                    <div className="field col-span-2">
+                      <label className="field-label" htmlFor="reg-company">
+                        Company Name <span className="required-star">*</span>
+                      </label>
+                      <input
+                        id="reg-company"
+                        value={form.company}
+                        maxLength={150}
+                        placeholder="e.g. Northstar Technologies Pvt Ltd"
+                        onChange={e => update('company', e.target.value)}
+                        onBlur={() => setErrors(x => ({ ...x, company: validateField('company') }))}
+                      />
+                      {errors.company && <span className="field-error">{errors.company}</span>}
+                    </div>
+
+                    <div className="field">
+                      <label className="field-label" htmlFor="reg-pan">
+                        Company PAN ID
+                      </label>
+                      <input
+                        id="reg-pan"
+                        value={form.pan}
+                        maxLength={10}
+                        placeholder="ABCDE1234F"
+                        onChange={e => update('pan', e.target.value.toUpperCase())}
+                      />
+                      <span className="field-hint">Optional · 10-character Indian PAN</span>
+                      {errors.pan && <span className="field-error">{errors.pan}</span>}
+                    </div>
+
+                    <div className="field">
+                      <label className="field-label" htmlFor="reg-msme">
+                        MSME Registration
+                      </label>
+                      <input
+                        id="reg-msme"
+                        value={form.msme}
+                        placeholder="e.g. UDYAM-XX-00-0000000"
+                        onChange={e => update('msme', e.target.value.toUpperCase())}
+                      />
+                      <span className="field-hint">Optional MSME/Udyam certification</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Step 2: Business Location */}
+              {step === 2 && (
+                <>
+                  <div className="section-banner">
+                    <span className="section-icon-box">
+                      <Icon name="MapPin" size={18} />
+                    </span>
+                    <div>
+                      <h3>Business Location</h3>
+                      <p>Enter your company's registered Indian operating address.</p>
+                    </div>
+                  </div>
+
+                  <div className="field-grid">
+                    <div className="field col-span-2">
+                      <label className="field-label" htmlFor="reg-address1">
+                        Address Line 1 <span className="required-star">*</span>
+                      </label>
+                      <input
+                        id="reg-address1"
+                        value={form.address1}
+                        placeholder="Street address, building, floor or suite"
+                        onChange={e => update('address1', e.target.value)}
+                      />
+                      {errors.address1 && <span className="field-error">{errors.address1}</span>}
+                    </div>
+
+                    <div className="field col-span-2">
+                      <label className="field-label" htmlFor="reg-address2">
+                        Address Line 2
+                      </label>
+                      <input
+                        id="reg-address2"
+                        value={form.address2}
+                        placeholder="Landmark, area, or campus (optional)"
+                        onChange={e => update('address2', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="field">
+                      <label className="field-label" htmlFor="reg-country">
+                        Country
+                      </label>
+                      <input id="reg-country" value="India" readOnly aria-readonly="true" />
+                      <span className="field-hint">OSF registration is currently restricted to India.</span>
+                    </div>
+
+                    <div className="field">
+                      <label className="field-label" htmlFor="reg-state">
+                        State / Union Territory <span className="required-star">*</span>
+                      </label>
+                      <select
+                        id="reg-state"
+                        value={form.state}
+                        onChange={e => {
+                          update('state', e.target.value);
+                          update('city', '');
+                        }}
+                      >
+                        <option value="">Select State / UT</option>
+                        {INDIAN_STATES.map(s => (
+                          <option key={s.isoCode} value={s.name}>{s.name}</option>
+                        ))}
+                      </select>
+                      {errors.state && <span className="field-error">{errors.state}</span>}
+                    </div>
+
+                    <div className="field">
+                      <label className="field-label" htmlFor="reg-city">
+                        City <span className="required-star">*</span>
+                      </label>
+                      <select
+                        id="reg-city"
+                        value={form.city}
+                        disabled={!form.state || citiesLoading}
+                        onChange={e => update('city', e.target.value)}
+                      >
+                        <option value="">{citiesLoading ? 'Loading cities…' : 'Select City'}</option>
+                        {cityOptions.map((c, i) => (
+                          <option key={`${c}-${i}`} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      {errors.city && <span className="field-error">{errors.city}</span>}
+                    </div>
+
+                    <div className="field">
+                      <label className="field-label" htmlFor="reg-postal">
+                        PIN Code <span className="required-star">*</span>
+                      </label>
+                      <input
+                        id="reg-postal"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={form.postal}
+                        placeholder="6-digit PIN Code"
+                        onChange={e => update('postal', e.target.value)}
+                      />
+                      {errors.postal && <span className="field-error">{errors.postal}</span>}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Step 3: Contact Information */}
+              {step === 3 && (
+                <>
+                  <div className="section-banner">
+                    <span className="section-icon-box">
+                      <Icon name="UserRound" size={18} />
+                    </span>
+                    <div>
+                      <h3>Contact Information</h3>
+                      <p>Designate an authorized representative for this company account.</p>
+                    </div>
+                  </div>
+
+                  <div className="field-grid">
+                    <div className="field col-span-2">
+                      <label className="field-label" htmlFor="reg-contact">
+                        Contact Person Full Name <span className="required-star">*</span>
+                      </label>
+                      <input
+                        id="reg-contact"
+                        value={form.contact}
+                        placeholder="e.g. Aanya Sharma"
+                        onChange={e => update('contact', e.target.value)}
+                      />
+                      {errors.contact && <span className="field-error">{errors.contact}</span>}
+                    </div>
+
+                    <div className="field">
+                      <label className="field-label" htmlFor="reg-email">
+                        Company Corporate Email <span className="required-star">*</span>
+                      </label>
+                      <input
+                        id="reg-email"
+                        type="email"
+                        value={form.email}
+                        placeholder="representative@company.com"
+                        onChange={e => update('email', e.target.value)}
+                      />
+                      <span className="field-hint">A one-time verification code will be sent to this email.</span>
+                      {errors.email && <span className="field-error">{errors.email}</span>}
+                    </div>
+
+                    <div className="field">
+                      <label className="field-label" htmlFor="reg-phone">
+                        Indian Phone Number
+                      </label>
+                      <div className="phone-input-group">
+                        <span className="phone-prefix">+91</span>
+                        <input
+                          id="reg-phone"
+                          type="tel"
+                          inputMode="tel"
+                          value={form.phone}
+                          placeholder="10-digit mobile number"
+                          onChange={e => update('phone', e.target.value)}
+                        />
+                      </div>
+                      <span className="field-hint">Optional · Used for account recovery alerts</span>
+                      {errors.phone && <span className="field-error">{errors.phone}</span>}
+                    </div>
+                  </div>
+
+                  {/* Review Summary Box */}
+                  <div className="review-card">
+                    <div className="review-card-head">
+                      <Icon name="FileCheck2" size={18} />
+                      <span>Review Details Prior to Submission</span>
+                    </div>
+                    <div className="review-rows">
+                      <div className="review-row">
+                        <span className="review-row-label">Company Name:</span>
+                        <span className="review-row-val">{form.company || '—'}</span>
+                      </div>
+                      <div className="review-row">
+                        <span className="review-row-label">PAN & MSME:</span>
+                        <span className="review-row-val">{[form.pan, form.msme].filter(Boolean).join(' · ') || 'None provided'}</span>
+                      </div>
+                      <div className="review-row">
+                        <span className="review-row-label">Location:</span>
+                        <span className="review-row-val">{[form.city, form.state, 'India'].filter(Boolean).join(', ') || '—'}</span>
+                      </div>
+                      <div className="review-row">
+                        <span className="review-row-label">Representative:</span>
+                        <span className="review-row-val">{form.contact || '—'} ({form.email || '—'})</span>
+                      </div>
+                    </div>
+                    <div className="review-footnote">
+                      <Icon name="ShieldCheck" size={15} />
+                      <span>Your company information is encrypted and secured under OSF Enterprise Terms.</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Navigation & Action Bar with clearly visible Back arrow */}
+              <div className="form-actions">
+                {step > 1 ? (
+                  <button className="btn btn-outline" onClick={() => moveStep(-1)}>
+                    <Icon name="ArrowLeft" size={16} />
+                    <span>Back</span>
+                  </button>
+                ) : (
+                  <button className="btn btn-outline" onClick={() => go('/login')}>
+                    <Icon name="ArrowLeft" size={16} />
+                    <span>Back to Sign In</span>
+                  </button>
+                )}
+
+                {step < 3 ? (
+                  <button className="btn btn-primary" onClick={() => moveStep(1)}>
+                    <span>Continue</span>
+                    <Icon name="ArrowRight" size={16} />
+                  </button>
+                ) : (
+                  <button className="btn btn-primary" onClick={startVerify} disabled={busy}>
+                    {busy ? (
+                      <>
+                        <span className="loading-spinner" />
+                        <span>Creating Account…</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Submit Registration</span>
+                        <Icon name="ArrowRight" size={16} />
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              <div className="form-auth-switch">
+                Already registered with OSF? <button onClick={() => go('/login')}>Sign in here</button>
+              </div>
+            </section>
+          )}
+
+          {/* VERIFY EMAIL PAGE */}
+          {page === '/verify-email' && (
+            <section className="form-wrap narrow auth-card">
+              {/* Back navigation to edit registration */}
+              <div style={{ marginBottom: '16px' }}>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => {
+                    setPendingRegistration(null);
+                    go('/register');
+                    setStep(3);
+                  }}
+                >
+                  <Icon name="ArrowLeft" size={15} />
+                  <span>Back to Registration</span>
+                </button>
+              </div>
+
+              <div className="auth-icon-circle">
+                <Icon name="Mail" size={24} />
+              </div>
+              <div className="eyebrow">ONE QUICK CHECK · SECURITY</div>
+              <h2>Verify your email</h2>
+              <p className="page-lead">
+                We’ve sent a 6-digit confirmation code to{' '}
+                <strong>{maskEmail(pendingRegistration?.email || form.email)}</strong>.
+              </p>
+
+              {emailDeliveryFailed && (
+                <div className="alert alert-warning" role="alert">
+                  <Icon name="AlertCircle" size={18} />
+                  <div>
+                    <strong>Email Delivery Notification</strong>
+                    <div style={{ fontSize: '12.5px', marginTop: '2px' }}>
+                      Automated dispatch could not connect. Check SMTP settings or request a resend below.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {verifiedRegistration ? (
+                <>
+                  <div className="alert alert-success" role="status">
+                    <Icon name="CheckCircle2" size={18} />
+                    <div>
+                      <strong>Email verified for User ID {verifiedRegistration.userId}</strong>
+                      <div style={{ fontSize: '12.5px', marginTop: '2px' }}>
+                        A password setup link is required to complete account initialization.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn-primary full"
+                    disabled={busy || cooldown > 0}
+                    onClick={resendSetup}
+                  >
+                    {busy ? (
+                      <span className="loading-spinner" />
+                    ) : cooldown > 0 ? (
+                      `Try again in ${cooldown}s`
+                    ) : (
+                      <>
+                        <span>Send Password Setup Link</span>
+                        <Icon name="ArrowRight" size={16} />
+                      </>
+                    )}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="field">
+                    <label className="field-label" htmlFor="otp-input">
+                      6-Digit Verification Code
+                    </label>
+                    <input
+                      id="otp-input"
+                      className="otp-input-field"
+                      maxLength={6}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={otpInput}
+                      placeholder="••••••"
+                      onChange={e => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    />
+                  </div>
+
+                  <button className="btn btn-primary full" disabled={busy} onClick={submitOtp} style={{ marginTop: '16px' }}>
+                    {busy ? (
+                      <>
+                        <span className="loading-spinner" />
+                        <span>Verifying Code…</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Verify & Continue</span>
+                        <Icon name="ArrowRight" size={16} />
+                      </>
+                    )}
+                  </button>
+
+                  <div className="resend-bar">
+                    {cooldown > 0 ? (
+                      <span>
+                        <Icon name="Clock3" size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                        Resend code in {cooldown}s
+                      </span>
+                    ) : (
+                      <button disabled={busy} onClick={resendOtp}>
+                        Resend verification code
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setPendingRegistration(null);
+                        go('/register');
+                        setStep(3);
+                      }}
+                    >
+                      Change email
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <div style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', marginTop: '24px' }}>
+                Codes expire in 5 minutes. Standard cooldown: 60 seconds.
+              </div>
+            </section>
+          )}
+
+          {/* SET PASSWORD PAGE */}
+          {page === '/set-password' && (
+            <section className="form-wrap narrow auth-card">
+              <div style={{ marginBottom: '16px' }}>
+                <button className="btn btn-outline btn-sm" onClick={() => go('/login')}>
+                  <Icon name="ArrowLeft" size={15} />
+                  <span>Back to Sign In</span>
+                </button>
+              </div>
+
+              <div className="auth-icon-circle">
+                <Icon name="ShieldCheck" size={24} />
+              </div>
+              <div className="eyebrow">SECURE YOUR ACCOUNT</div>
+              <h2>Create your password</h2>
+              <p className="page-lead">Set a strong password to complete registration for your OSF company account.</p>
+
+              {(setupLinkError ||
+                (!new URLSearchParams(location.search).get('token') &&
+                  'This password setup link is invalid or expired.')) && (
+                <div className="alert alert-warning" role="alert">
+                  <Icon name="AlertCircle" size={18} />
+                  <div>
+                    <strong>Link Notice</strong>
+                    <div style={{ fontSize: '12.5px', marginTop: '2px' }}>
+                      {setupLinkError || 'This password setup link is invalid or expired. Request a fresh setup email from sign-in.'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="field" style={{ marginBottom: '14px' }}>
+                <label className="field-label" htmlFor="new-setup-pass">
+                  New Password <span className="required-star">*</span>
+                </label>
+                <div className="password-box">
+                  <input
+                    id="new-setup-pass"
+                    type={showPassword ? 'text' : 'password'}
+                    value={setupPassword}
+                    autoComplete="new-password"
+                    placeholder="Enter new password"
+                    onChange={e => setSetupPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    onClick={() => setShowPassword(v => !v)}
+                  >
+                    {showPassword ? <Icon name="EyeOff" size={16} /> : <Icon name="Eye" size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="auth-rules-box">
+                Password must contain at least 12 characters, including uppercase and lowercase letters, a number, and a special character.
+              </div>
+
+              <div className="field" style={{ marginBottom: '20px' }}>
+                <label className="field-label" htmlFor="confirm-setup-pass">
+                  Confirm Password <span className="required-star">*</span>
+                </label>
+                <div className="password-box">
+                  <input
+                    id="confirm-setup-pass"
+                    type={showPassword ? 'text' : 'password'}
+                    value={setupConfirmation}
+                    autoComplete="new-password"
+                    placeholder="Repeat new password"
+                    onChange={e => setSetupConfirmation(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <button
+                className="btn btn-primary full"
+                disabled={busy || Boolean(setupLinkError) || !new URLSearchParams(location.search).get('token')}
+                onClick={completeSetup}
+              >
+                {busy ? (
+                  <>
+                    <span className="loading-spinner" />
+                    <span>Saving Password…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Confirm & Finish Setup</span>
+                    <Icon name="ArrowRight" size={16} />
+                  </>
+                )}
+              </button>
+            </section>
+          )}
+
+          {/* SIGN IN / LOGIN PAGE */}
+          {page === '/login' && (
+            <section className="form-wrap narrow auth-card">
+              <div style={{ marginBottom: '16px' }}>
+                <button className="btn btn-outline btn-sm" onClick={() => go('/register')}>
+                  <Icon name="ArrowLeft" size={15} />
+                  <span>Back to Registration</span>
+                </button>
+              </div>
+
+              <div className="eyebrow">WELCOME BACK · ENTERPRISE ACCESS</div>
+              <h2>Sign in to OSF</h2>
+              <p className="page-lead">Enter your assigned OSF User ID and password to access your company workspace.</p>
+
+              <div className="field" style={{ marginBottom: '16px' }}>
+                <label className="field-label" htmlFor="login-id">
+                  OSF User ID <span className="required-star">*</span>
+                </label>
+                <input
+                  id="login-id"
+                  autoComplete="username"
+                  value={loginId}
+                  placeholder="e.g. OSF-123456"
+                  onChange={e => setLoginId(e.target.value)}
+                />
+              </div>
+
+              <div className="field" style={{ marginBottom: '22px' }}>
+                <label className="field-label" htmlFor="login-password">
+                  Password <span className="required-star">*</span>
+                </label>
+                <div className="password-box">
+                  <input
+                    id="login-password"
+                    autoComplete="current-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={loginPassword}
+                    placeholder="Enter your password"
+                    onChange={e => setLoginPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    onClick={() => setShowPassword(v => !v)}
+                  >
+                    {showPassword ? <Icon name="EyeOff" size={16} /> : <Icon name="Eye" size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <button className="btn btn-primary full" disabled={busy || authLoading} onClick={login}>
+                {busy ? (
+                  <>
+                    <span className="loading-spinner" />
+                    <span>Authenticating…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In</span>
+                    <Icon name="ArrowRight" size={16} />
+                  </>
+                )}
+              </button>
+
+              <div className="form-auth-switch" style={{ marginTop: '20px' }}>
+                New enterprise to OSF? <button onClick={() => go('/register')}>Register your company</button>
+              </div>
+
+              {/* Password Setup Recovery Accordion */}
+              <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                <button
+                  type="button"
+                  style={{ fontSize: '13px', color: 'var(--text-secondary)', textDecoration: 'underline' }}
+                  onClick={() => {
+                    setShowSetupRecovery(v => !v);
+                    setSetupRecoveryState('idle');
+                    setSetupRecoveryMessage('');
+                  }}
+                >
+                  Need to setup or recover your password?
+                </button>
+              </div>
+
+              {showSetupRecovery && (
+                <div className="recovery-card">
+                  <h3>Resend Password Setup Email</h3>
+                  <p>Provide your registered corporate email to receive a password activation link.</p>
+
+                  <div className="field" style={{ marginBottom: '14px' }}>
+                    <label className="field-label" htmlFor="recovery-email">
+                      Registered Company Email
+                    </label>
+                    <input
+                      id="recovery-email"
+                      type="email"
+                      autoComplete="email"
+                      value={setupEmail}
+                      placeholder="representative@company.com"
+                      onChange={e => setSetupEmail(e.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    className="btn btn-outline full"
+                    disabled={setupRecoveryState === 'sending' || setupRecoveryCooldown > 0}
+                    onClick={requestSetupRecovery}
+                  >
+                    {setupRecoveryState === 'sending'
+                      ? 'Dispatching…'
+                      : setupRecoveryCooldown > 0
+                      ? `Wait ${setupRecoveryCooldown}s before retrying`
+                      : 'Send Activation Link'}
+                  </button>
+
+                  {setupRecoveryMessage && (
+                    <div
+                      className={`alert ${setupRecoveryState === 'failure' ? 'alert-danger' : 'alert-success'}`}
+                      style={{ marginTop: '14px', marginBottom: 0 }}
+                      role="status"
+                    >
+                      {setupRecoveryState === 'failure' ? (
+                        <Icon name="AlertCircle" size={16} />
+                      ) : (
+                        <Icon name="CheckCircle2" size={16} />
+                      )}
+                      <span>{setupRecoveryMessage}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* CHANGE PASSWORD PAGE */}
+          {page === '/change-password' && (
+            <section className="form-wrap narrow auth-card">
+              <div style={{ marginBottom: '16px' }}>
+                <button className="btn btn-outline btn-sm" onClick={() => go('/dashboard')}>
+                  <Icon name="ArrowLeft" size={15} />
+                  <span>Back to Workspace</span>
+                </button>
+              </div>
+
+              <div className="eyebrow">ACCOUNT SECURITY</div>
+              <h2>Change your password</h2>
+              <p className="page-lead">Update your authentication password for this OSF company account.</p>
+
+              <div className="field" style={{ marginBottom: '14px' }}>
+                <label className="field-label" htmlFor="current-pass">
+                  Current Password <span className="required-star">*</span>
+                </label>
+                <div className="password-box">
+                  <input
+                    id="current-pass"
+                    type={showPassword ? 'text' : 'password'}
+                    value={currentPassword}
+                    autoComplete="current-password"
+                    placeholder="Enter current password"
+                    onChange={e => setCurrentPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    onClick={() => setShowPassword(v => !v)}
+                  >
+                    {showPassword ? <Icon name="EyeOff" size={16} /> : <Icon name="Eye" size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="field" style={{ marginBottom: '14px' }}>
+                <label className="field-label" htmlFor="new-pass">
+                  New Password <span className="required-star">*</span>
+                </label>
+                <div className="password-box">
+                  <input
+                    id="new-pass"
+                    type={showPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    autoComplete="new-password"
+                    placeholder="Enter new password"
+                    onChange={e => setNewPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="auth-rules-box">
+                Must be at least 12 characters long and include uppercase, lowercase, numbers, and special symbols.
+              </div>
+
+              <div className="field" style={{ marginBottom: '22px' }}>
+                <label className="field-label" htmlFor="confirm-pass">
+                  Confirm New Password <span className="required-star">*</span>
+                </label>
+                <div className="password-box">
+                  <input
+                    id="confirm-pass"
+                    type={showPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    autoComplete="new-password"
+                    placeholder="Repeat new password"
+                    onChange={e => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-actions">
+                <button className="btn btn-outline" onClick={() => go('/dashboard')}>
+                  <Icon name="ArrowLeft" size={16} />
+                  <span>Cancel</span>
+                </button>
+                <button className="btn btn-primary" disabled={busy} onClick={changePassword}>
+                  {busy ? (
+                    <>
+                      <span className="loading-spinner" />
+                      <span>Saving Changes…</span>
+                    </>
+                  ) : (
+                    'Save New Password'
+                  )}
+                </button>
+              </div>
+            </section>
+          )}
+
+          {/* CONTACT US PAGE */}
+          {page === '/contact' && (
+            <ContactUs onBack={session ? () => go('/dashboard') : () => go('/register')} />
+          )}
+
+          {/* DASHBOARD EXPERIENCE */}
+          {page.startsWith('/dashboard') && session && (
+            <Dashboard
+              account={account}
+              tab={dashTab}
+              setTab={setDashTab}
+              go={go}
+              logout={logout}
+              onProfileUpdated={company =>
+                setAccount(current => ({ ...current, profile: toUiProfile(company) }))
+              }
+              date={fmtDate}
+              dark={dark}
+              setDark={setDark}
+            />
+          )}
+        </div>
+
+        {/* Global Footer (Non-dashboard pages) */}
+        {!isDashboard && (
+          <footer className="main-footer">
+            <span>© {new Date().getFullYear()} Our Startup Freelancer (OSF). All rights reserved.</span>
+            <span className="footer-muted">India Enterprise Registration Desk</span>
+          </footer>
+        )}
+      </main>
+
+      {/* Floating Toast Notification */}
+      {notice && (
+        <div className="toast-container">
+          <div className={`toast ${notice.startsWith('error') ? 'toast-error' : 'toast-success'}`} role="alert">
+            {notice.startsWith('error') ? (
+              <Icon name="AlertCircle" size={18} />
+            ) : (
+              <Icon name="CheckCircle2" size={18} />
+            )}
+            <span>{notice.split('|')[1]}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ==========================================================================
+   DASHBOARD COMPONENT (ENTERPRISE SIDEBAR + TOPBAR + CONTENT)
+   ========================================================================== */
+
+function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, dark, setDark }) {
+  const contactName = account?.profile?.contact || 'Representative';
+  const companyName = account?.profile?.company || 'Your Registered Enterprise';
+
+  const menu = [
+    { name: 'Overview', icon: 'LayoutDashboard', path: '/dashboard' },
+    { name: 'Company Profile', icon: 'Building2', path: '/dashboard/company' },
+    { name: 'Account Information', icon: 'UserRound', path: '/dashboard/account' },
+    { name: 'Activity', icon: 'Clock3', path: '/dashboard/activity' },
+  ];
+
+  return (
+    <div className="dash-container">
+      {/* Desktop Left Sidebar */}
+      <aside className="dash-sidebar" aria-label="Company Workspace Navigation">
+        <div>
+          <div className="dash-sidebar-brand">
+            <img src="/osf-logo.png" alt="OSF Logo" />
+          </div>
+
+          <div className="dash-nav-section-title">Workspace</div>
+          <nav className="dash-sidebar-nav">
+            {menu.map(item => (
+              <button
+                key={item.name}
+                className={`dash-sidebar-link ${tab === item.name ? 'active' : ''}`}
+                onClick={() => {
+                  setTab(item.name);
+                  go(item.path);
+                }}
+              >
+                <Icon name={item.icon} size={18} />
+                <span>{item.name}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="dash-sidebar-footer">
+          <div className="sidebar-user-badge">
+            <div className="sidebar-user-avatar">
+              {contactName.charAt(0).toUpperCase()}
+            </div>
+            <div className="sidebar-user-info">
+              <div className="sidebar-user-name">{contactName}</div>
+              <div className="sidebar-user-id">{account?.userId || 'OSF Enterprise'}</div>
+            </div>
+          </div>
+
+          <button className="sidebar-signout-btn" onClick={logout}>
+            <Icon name="LogOut" size={16} />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Workspace Area */}
+      <div className="dash-main-area">
+        {/* Top Header */}
+        <header className="dash-header">
+          <div className="dash-header-title">
+            <h2>{tab}</h2>
+            <span className="status-pill success">
+              <Icon name="CheckCircle2" size={12} /> Verified Enterprise
+            </span>
+          </div>
+
+          <div className="dash-header-tools">
+            <button className="contact-nav-link" onClick={() => go('/contact')}>
+              Contact Us
+            </button>
+            <button
+              className="theme-toggle"
+              onClick={() => setDark(v => !v)}
+              aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`}
+            >
+              {dark ? <Icon name="Sun" size={16} /> : <Icon name="Moon" size={16} />}
+              <span>{dark ? 'Light' : 'Dark'}</span>
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={logout}>
+              <Icon name="LogOut" size={15} />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Mobile Responsive Navigation Strip */}
+        <nav className="mobile-dash-nav" aria-label="Mobile workspace navigation">
+          {menu.map(item => (
+            <button
+              key={item.name}
+              className={`mobile-dash-tab ${tab === item.name ? 'active' : ''}`}
+              onClick={() => {
+                setTab(item.name);
+                go(item.path);
+              }}
+            >
+              <Icon name={item.icon} size={15} />
+              <span>{item.name}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Dashboard Body Area */}
+        <div className="dash-body">
+          {/* TAB 1: OVERVIEW */}
+          {tab === 'Overview' && (
+            <>
+              <div className="welcome-banner">
+                <div>
+                  <h1>Welcome back, {contactName.split(' ')[0]}</h1>
+                  <p>Here is an authenticated overview of your registered company workspace.</p>
+                </div>
+                <span className="status-pill success">
+                  <Icon name="ShieldCheck" size={14} /> Account Verified
+                </span>
+              </div>
+
+              {/* Verified Status Banner */}
+              <div className="dash-status-card">
+                <div className="dash-status-icon">
+                  <Icon name="Check" size={20} />
+                </div>
+                <div className="dash-status-content">
+                  <strong>Company account verified & compliant</strong>
+                  <p>
+                    <strong>{companyName}</strong> is actively registered under the OSF India jurisdiction.
+                  </p>
+                </div>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => {
+                    setTab('Company Profile');
+                    go('/dashboard/company');
+                  }}
+                >
+                  <span>View Profile</span>
+                  <Icon name="ArrowRight" size={14} />
+                </button>
+              </div>
+
+              {/* 2-Column Cards Grid */}
+              <div className="dash-cards-grid">
+                {/* Company Overview Card */}
+                <div className="dash-card">
+                  <div className="dash-card-header">
+                    <div>
+                      <h3>Company Overview</h3>
+                      <p>Registered entity profile</p>
+                    </div>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      onClick={() => {
+                        setTab('Company Profile');
+                        go('/dashboard/company');
+                      }}
+                    >
+                      <Icon name="ArrowRight" size={14} />
+                    </button>
+                  </div>
+
+                  <div className="company-summary-row">
+                    <div className="company-avatar-box">
+                      {companyName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="company-summary-name">
+                      <h4>{companyName}</h4>
+                      <span>Incorporated Company Profile</span>
+                    </div>
+                  </div>
+
+                  <div className="data-table-rows">
+                    <div className="data-table-row">
+                      <span className="data-table-label">Registered Corporate Email</span>
+                      <span className="data-table-value">{account?.profile?.email || '—'}</span>
+                    </div>
+                    <div className="data-table-row">
+                      <span className="data-table-label">Country Jurisdiction</span>
+                      <span className="data-table-value">{account?.profile?.country || 'India'}</span>
+                    </div>
+                    <div className="data-table-row">
+                      <span className="data-table-label">Operating State</span>
+                      <span className="data-table-value">{account?.profile?.state || '—'}</span>
+                    </div>
+                    <div className="data-table-row">
+                      <span className="data-table-label">Member Since</span>
+                      <span className="data-table-value">{date(account?.registeredAt || new Date().toISOString())}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Account Security Card */}
+                <div className="dash-card">
+                  <div className="dash-card-header">
+                    <div>
+                      <h3>Account & Compliance</h3>
+                      <p>Verification integrity</p>
+                    </div>
+                    <Icon name="ShieldCheck" size={18} style={{ color: 'var(--color-success)' }} />
+                  </div>
+
+                  <div className="data-table-rows">
+                    <div className="data-table-row">
+                      <span className="data-table-label">Email Verification</span>
+                      <span className="status-pill success" style={{ padding: '2px 8px', fontSize: '11px' }}>
+                        <Icon name="CheckCircle2" size={11} /> Verified
+                      </span>
+                    </div>
+                    <div className="data-table-row">
+                      <span className="data-table-label">Account Status</span>
+                      <span className="status-pill success" style={{ padding: '2px 8px', fontSize: '11px' }}>
+                        Active
+                      </span>
+                    </div>
+                    <div className="data-table-row">
+                      <span className="data-table-label">Password Setup</span>
+                      <span className="status-pill success" style={{ padding: '2px 8px', fontSize: '11px' }}>
+                        Complete
+                      </span>
+                    </div>
+                    <div className="data-table-row">
+                      <span className="data-table-label">OSF User ID</span>
+                      <span className="data-table-value" style={{ fontFamily: 'var(--font-heading)' }}>
+                        {account?.userId || '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '20px', paddingTop: '14px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>Security Credentials</span>
+                    <button className="btn btn-outline btn-sm" onClick={() => go('/change-password')}>
+                      Change Password
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Activity Section with Polished Empty State */}
+              <div className="dash-card">
+                <div className="dash-card-header">
+                  <div>
+                    <h3>Recent Account Activity</h3>
+                    <p>Timeline of security and profile events</p>
+                  </div>
+                </div>
+
+                {account?.activity && account.activity.length > 0 ? (
+                  <div className="data-table-rows">
+                    {account.activity.map((item, idx) => (
+                      <div className="data-table-row" key={`${item}-${idx}`}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <Icon name="CheckCircle2" size={16} style={{ color: 'var(--color-success)' }} />
+                          <span>{item}</span>
+                        </div>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          {date(new Date().toISOString())}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state-box">
+                    <div className="empty-state-icon">
+                      <Icon name="Clock3" size={22} />
+                    </div>
+                    <strong>No Recent Activity Recorded</strong>
+                    <p>Account logs and verification updates will automatically appear here as they occur.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Actions Grid */}
+              <div className="quick-actions-grid">
+                <button
+                  className="quick-action-card"
+                  onClick={() => {
+                    setTab('Company Profile');
+                    go('/dashboard/company');
+                  }}
+                >
+                  <div className="quick-action-icon">
+                    <Icon name="Building2" size={20} />
+                  </div>
+                  <div className="quick-action-text">
+                    <strong>Company Profile</strong>
+                    <span>Review legal registered details & location</span>
+                  </div>
+                  <Icon name="ArrowRight" size={16} style={{ color: 'var(--text-muted)' }} />
+                </button>
+
+                <button
+                  className="quick-action-card"
+                  onClick={() => {
+                    setTab('Account Information');
+                    go('/dashboard/account');
+                  }}
+                >
+                  <div className="quick-action-icon">
+                    <Icon name="UserRound" size={20} />
+                  </div>
+                  <div className="quick-action-text">
+                    <strong>Account Information</strong>
+                    <span>View designated representative & access credentials</span>
+                  </div>
+                  <Icon name="ArrowRight" size={16} style={{ color: 'var(--text-muted)' }} />
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* TAB 2: COMPANY PROFILE */}
+          {tab === 'Company Profile' && (
+            <div>
+              <div style={{ marginBottom: '20px' }}>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => {
+                    setTab('Overview');
+                    go('/dashboard');
+                  }}
+                >
+                  <Icon name="ArrowLeft" size={15} />
+                  <span>Back to Overview</span>
+                </button>
+              </div>
+              <CompanyProfile profile={account?.profile} onSaved={onProfileUpdated} />
+            </div>
+          )}
+
+          {/* TAB 3: ACCOUNT INFORMATION */}
+          {tab === 'Account Information' && (
+            <div>
+              <div style={{ marginBottom: '20px' }}>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => {
+                    setTab('Overview');
+                    go('/dashboard');
+                  }}
+                >
+                  <Icon name="ArrowLeft" size={15} />
+                  <span>Back to Overview</span>
+                </button>
+              </div>
+
+              <div className="dash-card">
+                <div className="dash-card-header">
+                  <div>
+                    <h3>Account & Representative Information</h3>
+                    <p>OSF enterprise sign-in credentials and authorized contact</p>
+                  </div>
+                  <button className="btn btn-outline btn-sm" onClick={() => go('/change-password')}>
+                    Change Password
+                  </button>
+                </div>
+
+                <div className="data-table-rows">
+                  <div className="data-table-row">
+                    <span className="data-table-label">OSF User ID</span>
+                    <span className="data-table-value" style={{ fontFamily: 'var(--font-heading)' }}>
+                      {account?.userId || '—'}
+                    </span>
+                  </div>
+                  <div className="data-table-row">
+                    <span className="data-table-label">Designated Contact</span>
+                    <span className="data-table-value">{contactName}</span>
+                  </div>
+                  <div className="data-table-row">
+                    <span className="data-table-label">Registered Corporate Email</span>
+                    <span className="data-table-value">{account?.profile?.email || '—'}</span>
+                  </div>
+                  <div className="data-table-row">
+                    <span className="data-table-label">Email Status</span>
+                    <span className="status-pill success" style={{ padding: '2px 8px', fontSize: '11px' }}>
+                      <Icon name="CheckCircle2" size={11} /> Verified
+                    </span>
+                  </div>
+                  <div className="data-table-row">
+                    <span className="data-table-label">Account Jurisdiction</span>
+                    <span className="data-table-value">India (IN)</span>
+                  </div>
+                  <div className="data-table-row">
+                    <span className="data-table-label">Contact Phone</span>
+                    <span className="data-table-value">{account?.profile?.phone || 'Not provided'}</span>
+                  </div>
+                  <div className="data-table-row">
+                    <span className="data-table-label">Registration Date</span>
+                    <span className="data-table-value">{date(account?.registeredAt || new Date().toISOString())}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: ACTIVITY */}
+          {tab === 'Activity' && (
+            <div>
+              <div style={{ marginBottom: '20px' }}>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => {
+                    setTab('Overview');
+                    go('/dashboard');
+                  }}
+                >
+                  <Icon name="ArrowLeft" size={15} />
+                  <span>Back to Overview</span>
+                </button>
+              </div>
+
+              <div className="dash-card">
+                <div className="dash-card-header">
+                  <div>
+                    <h3>Security & Account Timeline</h3>
+                    <p>Audit trail of actions and verification status changes</p>
+                  </div>
+                </div>
+
+                {account?.activity && account.activity.length > 0 ? (
+                  <div className="data-table-rows">
+                    {account.activity.map((x, i) => (
+                      <div className="data-table-row" key={`${x}-${i}`}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <Icon name="CheckCircle2" size={16} style={{ color: 'var(--color-success)' }} />
+                          <span>{x}</span>
+                        </div>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          {date(new Date().toISOString())}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state-box">
+                    <div className="empty-state-icon">
+                      <Icon name="Clock3" size={22} />
+                    </div>
+                    <strong>No Activity Logged</strong>
+                    <p>Security and profile events will appear here in chronological order when recorded.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<App />);
