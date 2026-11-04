@@ -237,8 +237,8 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/company/profile', requireAuth, (req, res) => {
-  const company = db.prepare(`SELECT company_name AS companyName,pan,msme,address1,address2,country,country_code AS countryCode,state,city,postal,contact_name AS contactName,email,phone_e164 AS phone,created_at AS registeredAt,verified_at AS verifiedAt
-    FROM companies WHERE id=?`).get(req.session.company_id);
+  const company = db.prepare(`SELECT c.company_name AS companyName,c.pan,c.msme,c.address1,c.address2,c.country,c.country_code AS countryCode,c.state,c.city,c.postal,c.contact_name AS contactName,c.email,c.phone_e164 AS phone,c.created_at AS registeredAt,u.email_verified AS emailVerified
+    FROM companies c JOIN users u ON u.company_id=c.id WHERE c.id=? AND u.id=?`).get(req.session.company_id, req.session.account_id);
   if (!company) return res.status(404).json({ error: 'Company profile not found.' });
   res.json({ company });
 });
@@ -252,8 +252,8 @@ app.post('/api/company/profile', requireAuth, (req, res) => {
   const data = validateCompanyProfile(req.body, existing.email);
   db.prepare(`UPDATE companies SET company_name=?,pan=?,msme=?,address1=?,address2=?,country='India',country_code='IN',state=?,city=?,postal=?,contact_name=?,phone_e164=? WHERE id=?`)
     .run(data.companyName, data.pan || null, data.msme || null, data.address1, data.address2 || null, data.state, data.city, data.postal, data.contactName, data.phone || null, req.session.company_id);
-  const company = db.prepare(`SELECT company_name AS companyName,pan,msme,address1,address2,country,country_code AS countryCode,state,city,postal,contact_name AS contactName,email,phone_e164 AS phone,created_at AS registeredAt,verified_at AS verifiedAt
-    FROM companies WHERE id=?`).get(req.session.company_id);
+  const company = db.prepare(`SELECT c.company_name AS companyName,c.pan,c.msme,c.address1,c.address2,c.country,c.country_code AS countryCode,c.state,c.city,c.postal,c.contact_name AS contactName,c.email,c.phone_e164 AS phone,c.created_at AS registeredAt,u.email_verified AS emailVerified
+    FROM companies c JOIN users u ON u.company_id=c.id WHERE c.id=? AND u.id=?`).get(req.session.company_id, req.session.account_id);
   res.json({ company, message: 'Company profile updated.' });
 });
 

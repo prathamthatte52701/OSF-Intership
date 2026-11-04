@@ -106,6 +106,8 @@ function toUiProfile(company) {
     contact: company.contactName || '',
     email: company.email || '',
     phone: company.phone || '',
+    registeredAt: company.registeredAt || null,
+    emailVerified: company.emailVerified === true || company.emailVerified === 1,
   };
 }
 
@@ -216,7 +218,6 @@ function App() {
         setAccount({
           userId: result.userId,
           profile: toUiProfile(profileRes.company),
-          activity: [],
         });
       })
       .catch(() => {})
@@ -479,7 +480,6 @@ function App() {
       setAccount({
         userId: result.userId,
         profile: toUiProfile(profile.company),
-        activity: [],
       });
       go('/dashboard');
       notify('success', 'Welcome back to your workspace.');
@@ -628,7 +628,7 @@ function App() {
                 <span className="brand-feature-icon">
                   <Icon name="ShieldCheck" size={17} />
                 </span>
-                <span>Structured, verified business onboarding</span>
+                <span>Email-verified business onboarding</span>
               </div>
               <div className="brand-feature-item">
                 <span className="brand-feature-icon">
@@ -640,7 +640,7 @@ function App() {
                 <span className="brand-feature-icon">
                   <Icon name="Building2" size={17} />
                 </span>
-                <span>Compliant profiles & secure session access</span>
+                <span>Company profiles & secure session access</span>
               </div>
             </div>
           </div>
@@ -1575,8 +1575,8 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
         <header className="dash-header">
           <div className="dash-header-title">
             <h2>{tab}</h2>
-            <span className="status-pill success">
-              <Icon name="CheckCircle2" size={12} /> Verified Enterprise
+            <span className={`status-pill ${account?.profile?.emailVerified ? 'success' : 'warning'}`}>
+              {account?.profile?.emailVerified && <Icon name="CheckCircle2" size={12} />} Email {account?.profile?.emailVerified ? 'Verified' : 'Not Verified'}
             </span>
           </div>
 
@@ -1626,20 +1626,20 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
                   <h1>Welcome back, {contactName.split(' ')[0]}</h1>
                   <p>Here is an authenticated overview of your registered company workspace.</p>
                 </div>
-                <span className="status-pill success">
-                  <Icon name="ShieldCheck" size={14} /> Account Verified
+                <span className={`status-pill ${account?.profile?.emailVerified ? 'success' : 'warning'}`}>
+                  {account?.profile?.emailVerified && <Icon name="CheckCircle2" size={14} />} Email {account?.profile?.emailVerified ? 'Verified' : 'Not Verified'}
                 </span>
               </div>
 
-              {/* Verified Status Banner */}
+              {/* Company verification status */}
               <div className="dash-status-card">
                 <div className="dash-status-icon">
-                  <Icon name="Check" size={20} />
+                  <Icon name="Building2" size={20} />
                 </div>
                 <div className="dash-status-content">
-                  <strong>Company account verified & compliant</strong>
+                  <strong>Company verification is not available</strong>
                   <p>
-                    <strong>{companyName}</strong> is actively registered under the OSF India jurisdiction.
+                    Email verification confirms access to the registered email address. It does not verify legal company status or regulatory compliance.
                   </p>
                 </div>
                 <button
@@ -1699,7 +1699,7 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
                     </div>
                     <div className="data-table-row">
                       <span className="data-table-label">Member Since</span>
-                      <span className="data-table-value">{date(account?.registeredAt || new Date().toISOString())}</span>
+                      <span className="data-table-value">{account?.profile?.registeredAt ? date(account.profile.registeredAt) : 'Not available'}</span>
                     </div>
                   </div>
                 </div>
@@ -1717,8 +1717,8 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
                   <div className="data-table-rows">
                     <div className="data-table-row">
                       <span className="data-table-label">Email Verification</span>
-                      <span className="status-pill success" style={{ padding: '2px 8px', fontSize: '11px' }}>
-                        <Icon name="CheckCircle2" size={11} /> Verified
+                      <span className={`status-pill ${account?.profile?.emailVerified ? 'success' : 'warning'}`} style={{ padding: '2px 8px', fontSize: '11px' }}>
+                        {account?.profile?.emailVerified && <Icon name="CheckCircle2" size={11} />} {account?.profile?.emailVerified ? 'Email Verified' : 'Not Verified'}
                       </span>
                     </div>
                     <div className="data-table-row">
@@ -1759,29 +1759,12 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
                   </div>
                 </div>
 
-                {account?.activity && account.activity.length > 0 ? (
-                  <div className="data-table-rows">
-                    {account.activity.map((item, idx) => (
-                      <div className="data-table-row" key={`${item}-${idx}`}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <Icon name="CheckCircle2" size={16} style={{ color: 'var(--color-success)' }} />
-                          <span>{item}</span>
-                        </div>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          {date(new Date().toISOString())}
-                        </span>
-                      </div>
-                    ))}
+                <div className="empty-state-box">
+                  <div className="empty-state-icon">
+                    <Icon name="Clock3" size={22} />
                   </div>
-                ) : (
-                  <div className="empty-state-box">
-                    <div className="empty-state-icon">
-                      <Icon name="Clock3" size={22} />
-                    </div>
-                    <strong>No Recent Activity Recorded</strong>
-                    <p>Account logs and verification updates will automatically appear here as they occur.</p>
-                  </div>
-                )}
+                  <strong>Activity tracking is not yet available.</strong>
+                </div>
               </div>
 
               {/* Quick Actions Grid */}
@@ -1886,13 +1869,13 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
                   </div>
                   <div className="data-table-row">
                     <span className="data-table-label">Email Status</span>
-                    <span className="status-pill success" style={{ padding: '2px 8px', fontSize: '11px' }}>
-                      <Icon name="CheckCircle2" size={11} /> Verified
+                    <span className={`status-pill ${account?.profile?.emailVerified ? 'success' : 'warning'}`} style={{ padding: '2px 8px', fontSize: '11px' }}>
+                      {account?.profile?.emailVerified && <Icon name="CheckCircle2" size={11} />} {account?.profile?.emailVerified ? 'Email Verified' : 'Not Verified'}
                     </span>
                   </div>
                   <div className="data-table-row">
                     <span className="data-table-label">Account Jurisdiction</span>
-                    <span className="data-table-value">India (IN)</span>
+                    <span className="data-table-value">{account?.profile?.country || 'Not available'}{account?.profile?.countryCode ? ` (${account.profile.countryCode})` : ''}</span>
                   </div>
                   <div className="data-table-row">
                     <span className="data-table-label">Contact Phone</span>
@@ -1900,7 +1883,7 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
                   </div>
                   <div className="data-table-row">
                     <span className="data-table-label">Registration Date</span>
-                    <span className="data-table-value">{date(account?.registeredAt || new Date().toISOString())}</span>
+                    <span className="data-table-value">{account?.profile?.registeredAt ? date(account.profile.registeredAt) : 'Not available'}</span>
                   </div>
                 </div>
               </div>
@@ -1931,29 +1914,12 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
                   </div>
                 </div>
 
-                {account?.activity && account.activity.length > 0 ? (
-                  <div className="data-table-rows">
-                    {account.activity.map((x, i) => (
-                      <div className="data-table-row" key={`${x}-${i}`}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <Icon name="CheckCircle2" size={16} style={{ color: 'var(--color-success)' }} />
-                          <span>{x}</span>
-                        </div>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          {date(new Date().toISOString())}
-                        </span>
-                      </div>
-                    ))}
+                <div className="empty-state-box">
+                  <div className="empty-state-icon">
+                    <Icon name="Clock3" size={22} />
                   </div>
-                ) : (
-                  <div className="empty-state-box">
-                    <div className="empty-state-icon">
-                      <Icon name="Clock3" size={22} />
-                    </div>
-                    <strong>No Activity Logged</strong>
-                    <p>Security and profile events will appear here in chronological order when recorded.</p>
-                  </div>
-                )}
+                  <strong>Activity tracking is not yet available.</strong>
+                </div>
               </div>
             </div>
           )}

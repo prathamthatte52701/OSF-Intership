@@ -73,14 +73,6 @@ export default function ContactUs({ onBack }) {
         ))}
       </div>
 
-      {onBack && (
-        <div style={{ marginTop: '24px' }}>
-          <button className="btn btn-outline" onClick={onBack}>
-            <ArrowLeft size={16} />
-            <span>Back</span>
-          </button>
-        </div>
-      )}
     </section>
   );
 }

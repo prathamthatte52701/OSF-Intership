@@ -436,12 +436,14 @@ export default function CompanyProfile({ profile, onSaved, readOnly = false }) {
                 <span className="profile-item-value">{profile?.contact || '—'}</span>
               </div>
               <div className="profile-item">
-                <span className="profile-item-label">Verified Email</span>
+                <span className="profile-item-label">Email Verification</span>
                 <span className="profile-item-value">
                   {profile?.email || '—'}
-                  <span className="verified-email-badge">
-                    <Icon name="CheckCircle2" size={11} /> Verified
-                  </span>
+                  {profile?.emailVerified ? (
+                    <span className="verified-email-badge">
+                      <Icon name="CheckCircle2" size={11} /> Email Verified
+                    </span>
+                  ) : <span className="profile-item-label">Email Not Verified</span>}
                 </span>
               </div>
               <div className="profile-item">
@@ -449,10 +451,8 @@ export default function CompanyProfile({ profile, onSaved, readOnly = false }) {
                 <span className="profile-item-value">{profile?.phone || 'Not provided'}</span>
               </div>
               <div className="profile-item">
-                <span className="profile-item-label">Account Verification Status</span>
-                <span className="profile-item-value" style={{ color: 'var(--color-success)' }}>
-                  Confirmed & Active
-                </span>
+                <span className="profile-item-label">Company Verification</span>
+                <span className="profile-item-value">Not available</span>
               </div>
             </div>
           </div>

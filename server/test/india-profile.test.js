@@ -93,6 +93,10 @@ test('registration API enforces India and email uniqueness; profile API is authe
   assert.equal((await fetch(`${origin}/api/company/profile`)).status, 401);
   const profileResponse = await fetch(`${origin}/api/company/profile`, { headers: { cookie } });
   assert.equal(profileResponse.status, 200);
+  const profile = (await profileResponse.json()).company;
+  const registeredAt = db.prepare('SELECT created_at FROM companies WHERE id=?').get(companyId).created_at;
+  assert.equal(profile.registeredAt, registeredAt);
+  assert.equal(profile.emailVerified, 1);
   const payload = {
     companyName: 'Northstar Research', pan: '', msme: '', address1: '22 Residency Road', address2: '',
     state: 'Maharashtra', city: 'Pune', postal: '001234', contactName: 'Aanya Sharma', phone: '9876543210',
@@ -100,6 +104,8 @@ test('registration API enforces India and email uniqueness; profile API is authe
   };
   const saved = await post('/api/company/profile', payload, cookie);
   assert.equal(saved.status, 200);
+  assert.equal(saved.body.company.registeredAt, registeredAt);
+  assert.equal(saved.body.company.emailVerified, 1);
   assert.equal(saved.body.company.email, 'india@company.example');
   assert.equal(saved.body.company.pan, null);
   assert.equal(saved.body.company.postal, '001234');
