@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "cd client && npm run dev",
-    "server": "cd server && npm run dev",
-    "build": "cd client && npm run build",
-    "preview": "cd client && npm run preview"
+    "dev": "npm run dev --workspace @osf/client",
+    "server": "npm run dev --workspace @osf/server",
+    "build": "npm run build --workspace @osf/client",
+    "preview": "npm run preview --workspace @osf/client"
   },
   "workspaces": ["client", "server"]
 }

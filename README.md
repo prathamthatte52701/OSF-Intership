@@ -15,7 +15,7 @@ client/vite.config.js Vite config and /api development proxy
 Open a terminal in the `client/` folder:
 
 ```powershell
-cd client
+cd E:\OSF-Intership\client
 npm install
 npm run dev
 ```
@@ -34,11 +34,15 @@ To run only the API in a separate terminal, from the project root:
 Copy-Item .env.example .env
 ```
 
-Then run:
+Or run the server on its own from the server folder:
 
 ```powershell
-npm run server
+cd E:\OSF-Intership\server
+npm install
+npm run dev
 ```
+
+To run both from the project root instead, run `npm install` and then `npm run dev`.
 
 The API listens on `http://localhost:4000`; Vite forwards `/api` requests to it. SQLite data is created locally under `server/data/` and is ignored by Git.
 
