@@ -230,8 +230,15 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!history.state?.osfPortalRoute) {
+      history.replaceState({ osfPortalRoute: true, depth: 0 }, '', location.href);
+    }
+  }, []);
+
   const go = path => {
-    history.pushState({}, '', path);
+    const depth = history.state?.osfPortalRoute ? history.state.depth + 1 : 1;
+    history.pushState({ osfPortalRoute: true, depth }, '', path);
     setPage(path);
     setErrors({});
     setNotice('');
@@ -583,6 +590,40 @@ function App() {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    function handleKeyboardShortcuts(event) {
+      const target = event.target;
+      const isEditable = target instanceof HTMLElement && (
+        target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+      );
+
+      if (event.key === 'Backspace' && !isEditable && history.state?.osfPortalRoute && history.state.depth > 0) {
+        event.preventDefault();
+        history.back();
+        return;
+      }
+
+      if (event.key !== 'Enter' || event.repeat || busy || !target || target.tagName !== 'INPUT'
+        || !['/register', '/verify-email', '/login', '/set-password', '/change-password'].includes(page)) return;
+      event.preventDefault();
+      if (page === '/register') {
+        if (step < 3) moveStep(1);
+        else startVerify();
+      } else if (page === '/verify-email') {
+        submitOtp();
+      } else if (page === '/login') {
+        login();
+      } else if (page === '/set-password') {
+        completeSetup();
+      } else if (page === '/change-password') {
+        changePassword();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyboardShortcuts);
+    return () => window.removeEventListener('keydown', handleKeyboardShortcuts);
+  }, [page, step, busy]);
 
   async function logout() {
     try {

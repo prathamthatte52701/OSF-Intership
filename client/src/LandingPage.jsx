@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './landing.css';
 
 const solutions = [
@@ -22,6 +22,15 @@ export default function LandingPage({ go }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const route = path => event => { event.preventDefault(); setMenuOpen(false); go(path); };
   const closeMenu = () => setMenuOpen(false);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const handleEscape = event => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [menuOpen]);
 
   return (
     <div className="landing-page">
