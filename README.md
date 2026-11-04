@@ -145,7 +145,7 @@ From the repository root:
 npm run dev
 ```
 
-The development script starts both services:
+Run from the repository root to start both services:
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:4000
@@ -155,15 +155,33 @@ Vite proxies requests beginning with `/api` to the backend.
 
 Stop the development processes with `Ctrl+C`.
 
-### Run the backend separately
+### Run each service separately
 
-If you want to start only the Express API:
+Start only the Express API from the `server/` directory:
 
 ```bash
 npm run server
 ```
 
-The frontend development script is configured to start the API as well. Avoid starting a second API process on the same port.
+Or run the server workspace script from the repository root:
+
+```bash
+npm run dev --workspace @osf/server
+```
+
+Start only the Vite frontend from the `client/` directory:
+
+```bash
+npm run dev
+```
+
+Or run the client workspace script from the repository root:
+
+```bash
+npm run dev --workspace @osf/client
+```
+
+When running the client on its own, start the API separately so `/api` requests have a backend to reach.
 
 ## Available scripts
 

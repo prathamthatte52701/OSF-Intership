@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently --kill-others --names api,web --prefix-colors blue,green \"npm --prefix ../server run dev\" \"vite\"",
+    "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
