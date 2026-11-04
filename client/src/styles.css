@@ -97,7 +97,7 @@
 
 html {
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 16.5px;
   line-height: 1.5;
   color: var(--text-primary);
   background-color: var(--bg-page);
@@ -238,28 +238,30 @@ a:hover {
 
 /* Tastefully integrated OSF Logo Badge */
 .brand-logo-frame {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
   align-items: center;
   background: #FFFFFF;
   padding: 8px 16px;
   border-radius: var(--radius-sm);
-  margin-bottom: 40px;
+  margin-bottom: 28px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .brand-logo-frame img {
-  height: 38px;
+  height: 50px;
   width: auto;
   display: block;
 }
 
 .brand-kicker {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
   align-items: center;
   gap: 8px;
   font-family: var(--font-heading);
-  font-size: 11px;
+  font-size: 12.1px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -268,7 +270,7 @@ a:hover {
 }
 
 .brand-content h1 {
-  font-size: clamp(32px, 3.2vw, 44px);
+  font-size: clamp(35.2px, 3.2vw, 48.4px);
   line-height: 1.16;
   letter-spacing: -0.03em;
   font-weight: 800;
@@ -281,7 +283,7 @@ a:hover {
 }
 
 .brand-desc {
-  font-size: 15px;
+  font-size: 16.5px;
   line-height: 1.65;
   color: #C7D4E5;
   margin-bottom: 32px;
@@ -299,7 +301,7 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 14px;
-  font-size: 13.5px;
+  font-size: 14.8px;
   color: #E2EAF4;
   font-weight: 500;
 }
@@ -322,7 +324,7 @@ a:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 11px;
+  font-size: 12.1px;
   letter-spacing: 0.08em;
   font-weight: 600;
   color: #8CA0B8;
@@ -359,7 +361,7 @@ a:hover {
 }
 
 .mobile-logo img {
-  height: 32px;
+  height: 40px;
   width: auto;
 }
 
@@ -371,7 +373,7 @@ a:hover {
 }
 
 .contact-nav-link {
-  font-size: 13px;
+  font-size: 14.3px;
   font-weight: 600;
   color: var(--text-secondary);
   padding: 8px 14px;
@@ -384,11 +386,25 @@ a:hover {
   background-color: var(--bg-surface-elevated);
 }
 
+.website-nav-link {
+  color: var(--osf-blue);
+  font-size: 14.3px;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.website-nav-link:hover {
+  color: var(--osf-navy);
+  background: var(--osf-blue-light);
+}
+
 .theme-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13.2px;
   font-weight: 600;
   color: var(--text-secondary);
   padding: 8px 14px;
@@ -426,7 +442,7 @@ a:hover {
   align-items: center;
   border-top: 1px solid var(--border-color);
   background-color: var(--bg-surface);
-  font-size: 12px;
+  font-size: 13.2px;
   color: var(--text-secondary);
 }
 
@@ -456,7 +472,7 @@ a:hover {
   align-items: center;
   gap: 6px;
   font-family: var(--font-heading);
-  font-size: 11px;
+  font-size: 12.1px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -469,13 +485,13 @@ a:hover {
 }
 
 .form-wrap h2 {
-  font-size: clamp(24px, 2.5vw, 30px);
+  font-size: clamp(26.4px, 2.5vw, 33px);
   line-height: 1.25;
   margin-bottom: 8px;
 }
 
 .page-lead {
-  font-size: 14.5px;
+  font-size: 16px;
   color: var(--text-secondary);
   line-height: 1.6;
   margin-bottom: 28px;
@@ -522,7 +538,7 @@ a:hover {
   display: grid;
   place-items: center;
   font-family: var(--font-heading);
-  font-size: 13px;
+  font-size: 14.3px;
   font-weight: 700;
   background-color: var(--bg-surface);
   border: 2px solid var(--border-color);
@@ -531,7 +547,7 @@ a:hover {
 }
 
 .step-label {
-  font-size: 12.5px;
+  font-size: 13.8px;
   font-weight: 600;
   color: var(--text-secondary);
   transition: color var(--transition-fast);
@@ -588,12 +604,12 @@ a:hover {
 }
 
 .section-banner h3 {
-  font-size: 15px;
+  font-size: 16.5px;
   margin-bottom: 2px;
 }
 
 .section-banner p {
-  font-size: 12.5px;
+  font-size: 13.8px;
   color: var(--text-secondary);
   margin: 0;
 }
@@ -618,7 +634,7 @@ a:hover {
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: 14.3px;
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -637,7 +653,7 @@ a:hover {
   width: 100%;
   height: 46px;
   padding: 0 14px;
-  font-size: 14px;
+  font-size: 15.4px;
   color: var(--text-primary);
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -680,13 +696,13 @@ a:hover {
 }
 
 .field-hint {
-  font-size: 12px;
+  font-size: 13.2px;
   color: var(--text-secondary);
   line-height: 1.4;
 }
 
 .field-error {
-  font-size: 12px;
+  font-size: 13.2px;
   font-weight: 500;
   color: var(--color-danger);
   display: flex;
@@ -725,7 +741,7 @@ a:hover {
   padding: 0 12px;
   background-color: var(--bg-surface-elevated);
   border-right: 1px solid var(--border-color);
-  font-size: 13px;
+  font-size: 14.3px;
   font-weight: 600;
   color: var(--text-secondary);
   user-select: none;
@@ -781,7 +797,7 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 13.5px;
+  font-size: 14.8px;
   font-weight: 700;
   color: var(--text-primary);
   padding-bottom: 14px;
@@ -806,7 +822,7 @@ a:hover {
   display: grid;
   grid-template-columns: 140px 1fr;
   gap: 12px;
-  font-size: 13px;
+  font-size: 14.3px;
 }
 
 .review-row-label {
@@ -823,7 +839,7 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13.2px;
   color: var(--text-muted);
   margin-top: 14px;
   padding-top: 12px;
@@ -846,7 +862,7 @@ a:hover {
 
 .form-auth-switch {
   text-align: center;
-  font-size: 13.5px;
+  font-size: 14.8px;
   color: var(--text-secondary);
   margin-top: 24px;
 }
@@ -872,7 +888,7 @@ a:hover {
   justify-content: center;
   gap: 8px;
   font-family: var(--font-heading);
-  font-size: 13.5px;
+  font-size: 14.8px;
   font-weight: 700;
   padding: 0 20px;
   height: 46px;
@@ -927,7 +943,7 @@ a:hover {
 .btn-sm {
   height: 36px;
   padding: 0 14px;
-  font-size: 12.5px;
+  font-size: 13.8px;
 }
 
 /* Loading Spinners */
@@ -957,7 +973,7 @@ a:hover {
   gap: 6px;
   padding: 4px 12px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
+  font-size: 13.2px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -981,7 +997,7 @@ a:hover {
   gap: 12px;
   padding: 14px 16px;
   border-radius: var(--radius-md);
-  font-size: 13.5px;
+  font-size: 14.8px;
   line-height: 1.5;
   margin-bottom: 20px;
 }
@@ -1062,7 +1078,7 @@ a:hover {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  font-size: 13.5px;
+  font-size: 14.8px;
   font-weight: 600;
   pointer-events: auto;
   max-width: 90vw;
@@ -1114,7 +1130,7 @@ a:hover {
 /* OTP Verification Input Styling */
 .otp-input-field {
   font-family: var(--font-heading);
-  font-size: 24px !important;
+  font-size: 26.4px !important;
   font-weight: 800 !important;
   letter-spacing: 0.35em !important;
   text-align: center !important;
@@ -1126,7 +1142,7 @@ a:hover {
   align-items: center;
   justify-content: space-between;
   margin-top: 18px;
-  font-size: 13px;
+  font-size: 14.3px;
   color: var(--text-secondary);
 }
 
@@ -1149,7 +1165,7 @@ a:hover {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
-  font-size: 12px;
+  font-size: 13.2px;
   color: var(--text-secondary);
   line-height: 1.5;
   margin-bottom: 18px;
@@ -1165,12 +1181,12 @@ a:hover {
 }
 
 .recovery-card h3 {
-  font-size: 15px;
+  font-size: 16.5px;
   margin-bottom: 6px;
 }
 
 .recovery-card p {
-  font-size: 13px;
+  font-size: 14.3px;
   color: var(--text-secondary);
   margin-bottom: 16px;
 }
@@ -1209,10 +1225,12 @@ a:hover {
   border-radius: var(--radius-sm);
   margin-bottom: 28px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  justify-content: center;
+  text-decoration: none;
 }
 
 .dash-sidebar-brand img {
-  height: 32px;
+  height: 44px;
   width: auto;
 }
 
@@ -1225,7 +1243,7 @@ a:hover {
 
 .dash-nav-section-title {
   font-family: var(--font-heading);
-  font-size: 11px;
+  font-size: 12.1px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1240,7 +1258,7 @@ a:hover {
   gap: 12px;
   padding: 11px 14px;
   border-radius: var(--radius-sm);
-  font-size: 13.5px;
+  font-size: 14.8px;
   font-weight: 600;
   color: #C7D4E5;
   transition: all var(--transition-fast);
@@ -1303,7 +1321,7 @@ a:hover {
   background: var(--osf-gold);
   color: var(--osf-navy);
   font-family: var(--font-heading);
-  font-size: 13px;
+  font-size: 14.3px;
   font-weight: 800;
   display: grid;
   place-items: center;
@@ -1316,7 +1334,7 @@ a:hover {
 }
 
 .sidebar-user-name {
-  font-size: 13px;
+  font-size: 14.3px;
   font-weight: 700;
   color: #FFFFFF;
   white-space: nowrap;
@@ -1325,7 +1343,7 @@ a:hover {
 }
 
 .sidebar-user-id {
-  font-size: 11px;
+  font-size: 12.1px;
   color: #A3B8CC;
   white-space: nowrap;
   overflow: hidden;
@@ -1338,7 +1356,7 @@ a:hover {
   gap: 10px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 14.3px;
   font-weight: 600;
   color: #D1DCE8;
   transition: all var(--transition-fast);
@@ -1378,7 +1396,7 @@ a:hover {
 }
 
 .dash-header-title h2 {
-  font-size: 18px;
+  font-size: 19.8px;
   margin: 0;
   font-weight: 700;
 }
@@ -1408,12 +1426,12 @@ a:hover {
 }
 
 .welcome-banner h1 {
-  font-size: clamp(24px, 2.5vw, 32px);
+  font-size: clamp(26.4px, 2.5vw, 35.2px);
   margin-bottom: 6px;
 }
 
 .welcome-banner p {
-  font-size: 14.5px;
+  font-size: 16px;
   color: var(--text-secondary);
   margin: 0;
 }
@@ -1447,13 +1465,13 @@ a:hover {
 
 .dash-status-content strong {
   display: block;
-  font-size: 14px;
+  font-size: 15.4px;
   color: var(--text-primary);
   margin-bottom: 3px;
 }
 
 .dash-status-content p {
-  font-size: 13px;
+  font-size: 14.3px;
   color: var(--text-secondary);
   margin: 0;
 }
@@ -1484,12 +1502,12 @@ a:hover {
 }
 
 .dash-card-header h3 {
-  font-size: 16px;
+  font-size: 17.6px;
   margin-bottom: 4px;
 }
 
 .dash-card-header p {
-  font-size: 12.5px;
+  font-size: 13.8px;
   color: var(--text-secondary);
   margin: 0;
 }
@@ -1508,7 +1526,7 @@ a:hover {
   background-color: var(--osf-blue-light);
   color: var(--osf-blue);
   font-family: var(--font-heading);
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 800;
   display: grid;
   place-items: center;
@@ -1520,12 +1538,12 @@ a:hover {
 }
 
 .company-summary-name h4 {
-  font-size: 16px;
+  font-size: 17.6px;
   margin-bottom: 2px;
 }
 
 .company-summary-name span {
-  font-size: 12.5px;
+  font-size: 13.8px;
   color: var(--text-secondary);
 }
 
@@ -1541,7 +1559,7 @@ a:hover {
   align-items: center;
   padding: 12px 0;
   border-bottom: 1px solid var(--border-color);
-  font-size: 13px;
+  font-size: 14.3px;
 }
 
 .data-table-row:last-child {
@@ -1607,12 +1625,12 @@ a:hover {
 
 .quick-action-text strong {
   display: block;
-  font-size: 14px;
+  font-size: 15.4px;
   margin-bottom: 2px;
 }
 
 .quick-action-text span {
-  font-size: 12.5px;
+  font-size: 13.8px;
   color: var(--text-secondary);
 }
 
@@ -1640,13 +1658,13 @@ a:hover {
 }
 
 .empty-state-box strong {
-  font-size: 14.5px;
+  font-size: 16px;
   color: var(--text-primary);
   margin-bottom: 4px;
 }
 
 .empty-state-box p {
-  font-size: 13px;
+  font-size: 14.3px;
   color: var(--text-secondary);
   max-width: 320px;
   margin: 0;
@@ -1679,7 +1697,7 @@ a:hover {
 }
 
 .profile-section-card-head h3 {
-  font-size: 16px;
+  font-size: 17.6px;
   margin: 0;
 }
 
@@ -1696,13 +1714,13 @@ a:hover {
 }
 
 .profile-item-label {
-  font-size: 12.5px;
+  font-size: 13.8px;
   color: var(--text-secondary);
   font-weight: 500;
 }
 
 .profile-item-value {
-  font-size: 14px;
+  font-size: 15.4px;
   font-weight: 600;
   color: var(--text-primary);
   word-break: break-word;
@@ -1717,7 +1735,7 @@ a:hover {
   border: 1px solid var(--color-success-border);
   color: var(--color-success);
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: 12.1px;
   font-weight: 700;
   margin-left: 8px;
 }
@@ -1751,7 +1769,7 @@ a:hover {
   display: grid;
   place-items: center;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 15.4px;
   flex-shrink: 0;
 }
 
@@ -1760,13 +1778,13 @@ a:hover {
 }
 
 .contact-card-info h4 {
-  font-size: 14px;
+  font-size: 15.4px;
   margin-bottom: 4px;
 }
 
 .contact-status-tag {
   display: inline-block;
-  font-size: 12px;
+  font-size: 13.2px;
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -1792,7 +1810,7 @@ a:hover {
   gap: 8px;
   padding: 8px 14px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 14.3px;
   font-weight: 600;
   color: var(--text-secondary);
   background-color: var(--bg-surface-elevated);
@@ -1898,7 +1916,7 @@ a:hover {
   }
 
   .step-label {
-    font-size: 11px;
+    font-size: 12.1px;
   }
 
   .welcome-banner {
@@ -1925,6 +1943,14 @@ a:hover {
 
 /* Small Mobile Screens (360px - 400px) */
 @media (max-width: 400px) {
+  .topbar-actions .contact-nav-link {
+    display: none;
+  }
+
+  .topbar-actions {
+    gap: 4px;
+  }
+
   .step-label {
     display: none;
   }

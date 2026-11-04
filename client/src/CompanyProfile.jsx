@@ -323,7 +323,7 @@ export default function CompanyProfile({ profile, onSaved, readOnly = false }) {
             <Icon name="Lock" size={16} />
             <div>
               <strong>Company Email: {profile.email || '—'}</strong>
-              <div style={{ fontSize: '12px', marginTop: '2px', color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: '13.2px', marginTop: '2px', color: 'var(--text-secondary)' }}>
                 Email modification is restricted to preserve account security.
               </div>
             </div>

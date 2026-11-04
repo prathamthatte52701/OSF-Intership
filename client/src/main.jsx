@@ -655,9 +655,9 @@ function App() {
       {!isDashboard && (
         <aside className="brand-panel">
           <div className="brand-content">
-            <div className="brand-logo-frame">
+            <a className="brand-logo-frame" href="/" aria-label="OSF home" onClick={e => { e.preventDefault(); go('/'); }}>
               <img src="/osf-logo.png" alt="Our Startup Freelancer (OSF)" />
-            </div>
+            </a>
             <div className="brand-kicker">COMPANY REGISTRATION</div>
             <h1>
               Good things<br />
@@ -702,15 +702,16 @@ function App() {
           <header className="topbar">
             <a
               className="mobile-logo"
-              href="/register"
+              href="/"
               onClick={e => {
                 e.preventDefault();
-                go('/register');
+                go('/');
               }}
             >
               <img src="/osf-logo.png" alt="OSF Logo" />
             </a>
             <div className="topbar-actions">
+              <button className="website-nav-link" onClick={() => go('/')}>← Back to Website</button>
               <button className="contact-nav-link" onClick={() => go('/contact')}>
                 Contact Us
               </button>
@@ -1084,7 +1085,7 @@ function App() {
                   <Icon name="AlertCircle" size={18} />
                   <div>
                     <strong>Email Delivery Notification</strong>
-                    <div style={{ fontSize: '12.5px', marginTop: '2px' }}>
+                    <div style={{ fontSize: '13.8px', marginTop: '2px' }}>
                       Automated dispatch could not connect. Check SMTP settings or request a resend below.
                     </div>
                   </div>
@@ -1097,7 +1098,7 @@ function App() {
                     <Icon name="CheckCircle2" size={18} />
                     <div>
                       <strong>Email verified for User ID {verifiedRegistration.userId}</strong>
-                      <div style={{ fontSize: '12.5px', marginTop: '2px' }}>
+                      <div style={{ fontSize: '13.8px', marginTop: '2px' }}>
                         A password setup link is required to complete account initialization.
                       </div>
                     </div>
@@ -1176,7 +1177,7 @@ function App() {
                 </>
               )}
 
-              <div style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', marginTop: '24px' }}>
+              <div style={{ textAlign: 'center', fontSize: '13.2px', color: 'var(--text-muted)', marginTop: '24px' }}>
                 Codes expire in 5 minutes. Standard cooldown: 60 seconds.
               </div>
             </section>
@@ -1206,7 +1207,7 @@ function App() {
                   <Icon name="AlertCircle" size={18} />
                   <div>
                     <strong>Link Notice</strong>
-                    <div style={{ fontSize: '12.5px', marginTop: '2px' }}>
+                    <div style={{ fontSize: '13.8px', marginTop: '2px' }}>
                       {setupLinkError || 'This password setup link is invalid or expired. Request a fresh setup email from sign-in.'}
                     </div>
                   </div>
@@ -1350,7 +1351,7 @@ function App() {
               <div style={{ marginTop: '20px', textAlign: 'center' }}>
                 <button
                   type="button"
-                  style={{ fontSize: '13px', color: 'var(--text-secondary)', textDecoration: 'underline' }}
+                  style={{ fontSize: '14.3px', color: 'var(--text-secondary)', textDecoration: 'underline' }}
                   onClick={() => {
                     setShowSetupRecovery(v => !v);
                     setSetupRecoveryState('idle');
@@ -1573,9 +1574,9 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
       {/* Desktop Left Sidebar */}
       <aside className="dash-sidebar" aria-label="Company Workspace Navigation">
         <div>
-          <div className="dash-sidebar-brand">
+          <a className="dash-sidebar-brand" href="/" aria-label="Return to OSF home" onClick={e => { e.preventDefault(); go('/'); }}>
             <img src="/osf-logo.png" alt="OSF Logo" />
-          </div>
+          </a>
 
           <div className="dash-nav-section-title">Workspace</div>
           <nav className="dash-sidebar-nav">
@@ -1761,19 +1762,19 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
                   <div className="data-table-rows">
                     <div className="data-table-row">
                       <span className="data-table-label">Email Verification</span>
-                      <span className={`status-pill ${account?.profile?.emailVerified ? 'success' : 'warning'}`} style={{ padding: '2px 8px', fontSize: '11px' }}>
+                      <span className={`status-pill ${account?.profile?.emailVerified ? 'success' : 'warning'}`} style={{ padding: '2px 8px', fontSize: '12.1px' }}>
                         {account?.profile?.emailVerified && <Icon name="CheckCircle2" size={11} />} {account?.profile?.emailVerified ? 'Email Verified' : 'Not Verified'}
                       </span>
                     </div>
                     <div className="data-table-row">
                       <span className="data-table-label">Account Status</span>
-                      <span className="status-pill success" style={{ padding: '2px 8px', fontSize: '11px' }}>
+                      <span className="status-pill success" style={{ padding: '2px 8px', fontSize: '12.1px' }}>
                         Active
                       </span>
                     </div>
                     <div className="data-table-row">
                       <span className="data-table-label">Password Setup</span>
-                      <span className="status-pill success" style={{ padding: '2px 8px', fontSize: '11px' }}>
+                      <span className="status-pill success" style={{ padding: '2px 8px', fontSize: '12.1px' }}>
                         Complete
                       </span>
                     </div>
@@ -1786,7 +1787,7 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
                   </div>
 
                   <div style={{ marginTop: '20px', paddingTop: '14px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>Security Credentials</span>
+                    <span style={{ fontSize: '13.8px', color: 'var(--text-secondary)' }}>Security Credentials</span>
                     <button className="btn btn-outline btn-sm" onClick={() => go('/change-password')}>
                       Change Password
                     </button>
@@ -1913,7 +1914,7 @@ function Dashboard({ account, tab, setTab, go, logout, onProfileUpdated, date, d
                   </div>
                   <div className="data-table-row">
                     <span className="data-table-label">Email Status</span>
-                    <span className={`status-pill ${account?.profile?.emailVerified ? 'success' : 'warning'}`} style={{ padding: '2px 8px', fontSize: '11px' }}>
+                    <span className={`status-pill ${account?.profile?.emailVerified ? 'success' : 'warning'}`} style={{ padding: '2px 8px', fontSize: '12.1px' }}>
                       {account?.profile?.emailVerified && <Icon name="CheckCircle2" size={11} />} {account?.profile?.emailVerified ? 'Email Verified' : 'Not Verified'}
                     </span>
                   </div>

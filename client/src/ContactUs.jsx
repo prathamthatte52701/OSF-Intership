@@ -50,7 +50,7 @@ export default function ContactUs({ onBack }) {
       <div className="alert alert-info" role="status">
         <div>
           <strong>Support Channels Under Verification</strong>
-          <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+          <p style={{ margin: '4px 0 0', fontSize: '14.3px', color: 'var(--text-secondary)' }}>
             Official OSF support details will be published here upon final verification. Please note that no automated messages or contact forms are submitted from this page.
           </p>
         </div>
@@ -65,7 +65,7 @@ export default function ContactUs({ onBack }) {
             <div className="contact-card-info">
               <h4>{label}</h4>
               <span className="contact-status-tag">{status}</span>
-              <p style={{ margin: '8px 0 0', fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
+              <p style={{ margin: '8px 0 0', fontSize: '13.8px', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
                 {detail}
               </p>
             </div>
