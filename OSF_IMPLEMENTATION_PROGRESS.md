@@ -28,11 +28,10 @@
 
 ## Files
 
-- `package.json` — Vite scripts and React dependencies.
-- `index.html` — app entry and pre-render theme initialization.
-- `src/main.jsx` — app pages, mock journey state, and UI components.
-- `src/styles.css` — responsive light/dark design system and page styling.
-- `public/osf-logo.png` — supplied OSF logo.
+- `client/` — React + Vite frontend, including `index.html`, `src/`, and `public/osf-logo.png`.
+- `server/` — Express API, SQLite schema, security, validation, and Gmail mailer.
+- Root `package.json` — npm workspaces and `npm run dev`, `npm run server`, and `npm run build` commands.
+- `README.md` — setup and run instructions.
 
 ## Checks performed
 
@@ -72,8 +71,9 @@
 
 ## Run locally
 
-1. Copy `.env.example` to `.env` and set `OTP_HMAC_SECRET` (at least 32 random characters), `EMAIL_USER`, and a Gmail App Password in `EMAIL_APP_PASSWORD`.
-2. Run `npm run server` in one terminal and `npm run dev` in another.
-3. Open the Vite URL. Registration emails are sent to the email entered in the form.
+1. Run `npm install` once from the project root.
+2. Copy `.env.example` to `.env` and set `OTP_HMAC_SECRET` (at least 32 random characters), `EMAIL_USER`, and a Gmail App Password in `EMAIL_APP_PASSWORD`.
+3. Run `npm run server` in one terminal and `npm run dev` in another.
+4. Open the Vite URL. Registration emails are sent to the email entered in the form.
 
 Never commit `.env` or paste the Gmail App Password into chat. Production use still needs a chosen production database/hosting configuration and deployment security review.
