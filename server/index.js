@@ -31,6 +31,14 @@ app.disable('x-powered-by');
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
 app.use(express.json({ limit: '32kb' }));
 app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeaders: 'draft-8', legacyHeaders: false }));
+const passwordSetupIpLimiter = rateLimit({
+  windowMs: resendWindowMs, limit: maxResends, standardHeaders: 'draft-8', legacyHeaders: false,
+  handler: (_req, res) => res.status(429).json({ error: 'If the account is eligible, a setup link will be sent. Please wait before trying again.' }),
+});
+const passwordSetupIpCooldown = rateLimit({
+  windowMs: resendCooldownMs, limit: 1, standardHeaders: 'draft-8', legacyHeaders: false,
+  handler: (_req, res) => res.status(429).json({ error: 'If the account is eligible, a setup link will be sent. Please wait before trying again.' }),
+});
 
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const now = () => Date.now();
@@ -64,12 +72,35 @@ function requireAuth(req, res, next) {
 
 function setupUrl(token) { return `${config.appOrigin}/set-password?token=${encodeURIComponent(token)}`; }
 
-async function sendSetupFor(companyId) {
-  const record = db.prepare(`SELECT c.email,c.contact_name,c.company_name,u.id,u.user_id
-    FROM companies c JOIN users u ON u.company_id=c.id WHERE c.id=? AND u.password_hash IS NULL`).get(companyId);
-  if (!record) throw new InputError('Password setup is unavailable for this registration.', 409);
+function prepareSetupEmail(companyId, { enforceLimits = true } = {}) {
   const token = newSecret(32);
-  db.prepare('UPDATE users SET setup_token_hash=?,setup_expires_at=? WHERE id=?').run(sha256(token), now() + setupLifeMs, record.id);
+  const current = now();
+  const prepare = db.transaction(() => {
+    const record = db.prepare(`SELECT c.email,c.contact_name,c.company_name,u.id,u.user_id,u.setup_resend_count,u.setup_resend_window_started_at,u.setup_last_sent_at
+      FROM companies c JOIN users u ON u.company_id=c.id
+      WHERE c.id=? AND c.status='VERIFIED' AND u.email_verified=1 AND u.password_setup_status='PENDING'
+      AND u.must_change_password=1 AND u.password_hash IS NULL`).get(companyId);
+    if (!record) return null;
+    if (enforceLimits) {
+      if (current - record.setup_last_sent_at < resendCooldownMs) return { limited: true };
+      const resetWindow = current - record.setup_resend_window_started_at >= resendWindowMs;
+      const count = resetWindow ? 0 : record.setup_resend_count;
+      if (count >= maxResends) return { limited: true };
+      db.prepare(`UPDATE users SET setup_token_hash=?,setup_expires_at=?,setup_resend_count=?,setup_resend_window_started_at=?,setup_last_sent_at=? WHERE id=?`)
+        .run(sha256(token), current + setupLifeMs, count + 1, resetWindow ? current : record.setup_resend_window_started_at, current, record.id);
+    } else {
+      db.prepare(`UPDATE users SET setup_token_hash=?,setup_expires_at=?,setup_last_sent_at=? WHERE id=?`)
+        .run(sha256(token), current + setupLifeMs, current, record.id);
+    }
+    return { record, token };
+  });
+  return prepare();
+}
+
+async function sendSetupFor(companyId) {
+  const prepared = prepareSetupEmail(companyId);
+  if (!prepared || prepared.limited) throw new InputError('Password setup email is not available yet. Wait before requesting another email.', 429);
+  const { record, token } = prepared;
   await sendSetupEmail({ to: record.email, contactName: record.contact_name, companyName: record.company_name, userId: record.user_id, setupUrl: setupUrl(token) });
 }
 
@@ -127,8 +158,10 @@ app.post('/api/registrations/:id/verify-email', asyncRoute(async (req, res) => {
   const finish = db.transaction(() => {
     db.prepare(`UPDATE companies SET status='VERIFIED',verified_at=? WHERE id=?`).run(verifiedAt, challenge.id);
     db.prepare('DELETE FROM otp_challenges WHERE company_id=?').run(challenge.id);
-    db.prepare(`INSERT INTO users (id,company_id,user_id,setup_token_hash,setup_expires_at,created_at) VALUES (?,?,?,?,?,?)`)
-      .run(newId(), challenge.id, userId, sha256(setupToken), now() + setupLifeMs, verifiedAt);
+    const verifiedTime = now();
+    db.prepare(`INSERT INTO users (id,company_id,user_id,setup_token_hash,setup_expires_at,created_at,email_verified,must_change_password,password_setup_status,setup_resend_count,setup_resend_window_started_at,setup_last_sent_at)
+      VALUES (?,?,?,?,?,?,1,1,'PENDING',0,?,?)`)
+      .run(newId(), challenge.id, userId, sha256(setupToken), verifiedTime + setupLifeMs, verifiedAt, verifiedTime, verifiedTime);
   });
   finish();
   let emailDelivery = 'sent';
@@ -137,12 +170,32 @@ app.post('/api/registrations/:id/verify-email', asyncRoute(async (req, res) => {
   res.json({ verified: true, userId, emailDelivery, message: emailDelivery === 'sent' ? 'Email verified. Check your email to set a password.' : 'Email verified. The password setup email could not be sent; retry delivery.' });
 }));
 
-app.post('/api/registrations/:id/resend-setup', asyncRoute(async (req, res) => {
+app.post('/api/registrations/:id/resend-setup', passwordSetupIpLimiter, passwordSetupIpCooldown, asyncRoute(async (req, res) => {
   const record = db.prepare('SELECT u.id FROM users u WHERE u.company_id=? AND u.password_hash IS NULL').get(req.params.id);
   if (!record) throw new InputError('Password setup is unavailable for this registration.', 409);
   try { await sendSetupFor(req.params.id); }
   catch (error) { if (error instanceof InputError) throw error; return res.status(502).json({ error: 'Password setup email could not be sent. Try again later.' }); }
   res.json({ emailDelivery: 'sent', message: 'A new password setup link was sent.' });
+}));
+
+const genericSetupResponse = { message: 'If the account is eligible, a setup link will be sent. If it does not arrive, you can try again after 60 seconds.' };
+app.post('/api/auth/resend-password-setup', passwordSetupIpLimiter, passwordSetupIpCooldown, asyncRoute(async (req, res) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase().slice(0, 254) : '';
+  // Lookups, quotas and delivery errors intentionally share the same public response.
+  const company = email ? db.prepare(`SELECT c.id FROM companies c JOIN users u ON u.company_id=c.id
+    WHERE c.email=? COLLATE NOCASE AND c.status='VERIFIED' AND u.email_verified=1
+    AND u.password_setup_status='PENDING' AND u.must_change_password=1 AND u.password_hash IS NULL`).get(email) : null;
+  if (company) {
+    const prepared = prepareSetupEmail(company.id);
+    if (prepared?.record && !prepared.limited) {
+      try {
+        await sendSetupEmail({ to: prepared.record.email, contactName: prepared.record.contact_name, companyName: prepared.record.company_name, userId: prepared.record.user_id, setupUrl: setupUrl(prepared.token) });
+      } catch {
+        console.warn('Password setup email delivery failed.');
+      }
+    }
+  }
+  res.json(genericSetupResponse);
 }));
 
 app.post('/api/auth/setup-password', asyncRoute(async (req, res) => {
@@ -151,11 +204,13 @@ app.post('/api/auth/setup-password', asyncRoute(async (req, res) => {
   if (!validatePassword(password)) throw new InputError('Use at least 12 characters with uppercase, lowercase, a number and a special character.');
   if (password !== confirmation) throw new InputError('The password confirmation does not match.');
   const user = db.prepare(`SELECT u.id,u.user_id,u.company_id,c.email,c.contact_name FROM users u JOIN companies c ON c.id=u.company_id
-    WHERE u.setup_token_hash=? AND u.setup_expires_at>? AND u.password_hash IS NULL`).get(sha256(token), now());
+    WHERE u.setup_token_hash=? AND u.setup_expires_at>? AND u.password_hash IS NULL AND u.email_verified=1
+      AND u.password_setup_status='PENDING' AND u.must_change_password=1`).get(sha256(token), now());
   if (!user) throw new InputError('This password setup link is invalid or expired.', 410);
   const hash = await hashPassword(password);
-  const used = db.prepare(`UPDATE users SET password_hash=?,setup_token_hash=NULL,setup_expires_at=NULL,password_changed_at=?
-    WHERE id=? AND setup_token_hash=? AND setup_expires_at>? AND password_hash IS NULL`).run(hash, isoNow(), user.id, sha256(token), now());
+  const used = db.prepare(`UPDATE users SET password_hash=?,setup_token_hash=NULL,setup_expires_at=NULL,password_changed_at=?,password_setup_status='COMPLETED',must_change_password=0
+    WHERE id=? AND setup_token_hash=? AND setup_expires_at>? AND password_hash IS NULL AND email_verified=1
+      AND password_setup_status='PENDING' AND must_change_password=1`).run(hash, isoNow(), user.id, sha256(token), now());
   if (!used.changes) throw new InputError('This password setup link has already been used.', 410);
   res.json({ setup: true, userId: user.user_id });
 }));
@@ -209,4 +264,5 @@ app.use((error, _req, res, _next) => {
   res.status(status).json({ error: status >= 500 ? 'The request could not be completed.' : error.message });
 });
 
-app.listen(port, () => console.log(`OSF API listening on port ${port}`));
+export { app };
+if (process.env.NODE_ENV !== 'test') app.listen(port, () => console.log(`OSF API listening on port ${port}`));

@@ -1,6 +1,11 @@
 import nodemailer from 'nodemailer';
 
 let transporter;
+let testSender;
+export function setMailSenderForTests(sender) {
+  if (process.env.NODE_ENV !== 'test') throw new Error('Mail test sender is only available in test mode.');
+  testSender = sender;
+}
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
 
 function getTransporter() {
@@ -18,6 +23,7 @@ function frame(title, body) {
 }
 
 async function send({ to, subject, title, bodyHtml, text }) {
+  if (testSender) return testSender({ to, subject, title, bodyHtml, text });
   const senderName = process.env.EMAIL_FROM_NAME || 'OSF Admin';
   return getTransporter().sendMail({ from: { name: senderName, address: process.env.EMAIL_USER }, to, subject, text, html: frame(title, bodyHtml) });
 }

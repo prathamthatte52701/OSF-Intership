@@ -10,6 +10,7 @@
 :root{--link:#234f84}
 :root[data-theme=dark]{--link:#a9c8f1}
 .text-link,.status-banner>button,.login-prompt button,.soft-alert button,.demo-notice>button{color:var(--link)}
+.setup-recovery{margin-top:17px;padding:16px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface)}.setup-recovery h3{font:700 14px Manrope,sans-serif;margin:0 0 5px}.setup-recovery>p{font-size:12px;color:var(--muted);margin:0 0 14px}.setup-recovery .soft-alert{margin:12px 0 0;align-items:flex-start}.setup-recovery .soft-alert span{line-height:1.45}.setup-recovery .field{margin-bottom:12px}
 .section-icon,.company-monogram,.quick-links>button>span,.code-box,.credential-card>div strong{color:var(--link)}
 
 /* Phase 11: shared interaction, readability and responsive refinements */
