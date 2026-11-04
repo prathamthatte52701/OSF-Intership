@@ -7,29 +7,32 @@ Responsive company registration portal for Our Startup Freelancer.
 ```text
 client/       React + Vite frontend
 server/       Express API and local SQLite data
-vite.config.js Vite config and /api development proxy
+client/vite.config.js Vite config and /api development proxy
 ```
 
-## Run the frontend
+## Run the app (frontend + API)
 
-From the project root:
+Open a terminal in the `client/` folder:
 
 ```powershell
+cd client
 npm install
 npm run dev
 ```
 
-Open the URL printed by Vite (usually `http://localhost:5173`). This runs the frontend. API-backed registration requires the server too.
+`npm run dev` starts both Vite and the API. Open the URL printed by Vite (usually `http://localhost:5173`). Stop both with `Ctrl+C`.
+
+This runs registration and the UI locally. Real OTP/setup emails require Gmail settings in a root `.env`; without them the API reports that email delivery is unavailable.
 
 ## Run the API
 
-In a second terminal, from the project root:
+The API starts without Gmail settings so the UI can run locally. To enable real email delivery, create a root `.env` from `.env.example` and set `EMAIL_USER`, `EMAIL_APP_PASSWORD`, and `OTP_HMAC_SECRET` (at least 32 random characters). Keep `.env` private.
+
+To run only the API in a separate terminal, from the project root:
 
 ```powershell
 Copy-Item .env.example .env
 ```
-
-Set `OTP_HMAC_SECRET` in `.env` to a random value of at least 32 characters. For Gmail email delivery, also set `EMAIL_USER` and `EMAIL_APP_PASSWORD` to a Gmail account and its App Password. Keep `.env` private.
 
 Then run:
 

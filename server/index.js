@@ -1,7 +1,8 @@
-import 'dotenv/config';
+import './env.js';
 import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { randomBytes } from 'node:crypto';
 import { db } from './db.js';
 import { sendOtpEmail, sendPasswordChangedEmail, sendSetupEmail } from './mail.js';
 import { hashOtp, hashPassword, newId, newOtp, newSecret, newUserId, otpMatches, sha256, validatePassword, verifyPassword } from './security.js';
@@ -18,7 +19,11 @@ const sessionLifeMs = 12 * 60 * 60 * 1000;
 const setupLifeMs = 30 * 60 * 1000;
 const cookieName = 'osf_session';
 
-if (!process.env.OTP_HMAC_SECRET || process.env.OTP_HMAC_SECRET.length < 32) {
+if (!process.env.OTP_HMAC_SECRET) {
+  if (process.env.NODE_ENV === 'production') throw new Error('Set OTP_HMAC_SECRET to a random value of at least 32 characters.');
+  process.env.OTP_HMAC_SECRET = randomBytes(32).toString('hex');
+  console.warn('OTP_HMAC_SECRET is not set; using a temporary local-only secret.');
+} else if (process.env.OTP_HMAC_SECRET.length < 32) {
   throw new Error('Set OTP_HMAC_SECRET to a random value of at least 32 characters.');
 }
 

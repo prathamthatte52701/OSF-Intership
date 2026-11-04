@@ -1,8 +1,12 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const databasePath = resolve(process.env.DATABASE_PATH || 'server/data/osf.sqlite');
+const serverDir = dirname(fileURLToPath(import.meta.url));
+const databasePath = process.env.DATABASE_PATH
+  ? resolve(serverDir, '..', process.env.DATABASE_PATH)
+  : resolve(serverDir, 'data/osf.sqlite');
 mkdirSync(dirname(databasePath), { recursive: true });
 export const db = new Database(databasePath);
 db.pragma('journal_mode = WAL');
