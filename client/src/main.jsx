@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import CompanyProfile from './CompanyProfile.jsx';
 import ContactUs from './ContactUs.jsx';
+import LandingPage from './LandingPage.jsx';
 import { citiesForState, INDIAN_STATES, normalizeIndianPhone } from './india.js';
 import { api } from './api.js';
 import './styles.css';
@@ -68,7 +69,7 @@ const PASSWORD_RULES = {
 };
 
 const apiMode = import.meta.env.VITE_AUTH_MODE !== 'mock';
-const startPath = location.pathname === '/' ? '/register' : location.pathname;
+const startPath = location.pathname;
 
 function tabForPath(path) {
   if (path.endsWith('/company')) return 'Company Profile';
@@ -246,7 +247,7 @@ function App() {
   useEffect(() => {
     const handle = () => {
       if (apiMode && authLoading) return;
-      let p = location.pathname === '/' ? '/register' : location.pathname;
+      let p = location.pathname;
 
       if (p.startsWith('/dashboard') && !session) {
         p = '/login';
@@ -604,6 +605,8 @@ function App() {
 
   const isDashboard = page.startsWith('/dashboard');
   const progressLabels = ['Company Details', 'Business Location', 'Contact Information'];
+
+  if (page === '/') return <LandingPage go={go} />;
 
   return (
     <div className={`app-shell ${isDashboard ? 'dashboard-shell' : ''}`}>
