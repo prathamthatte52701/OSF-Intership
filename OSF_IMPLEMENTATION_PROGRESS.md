@@ -38,6 +38,7 @@
 
 - `npm install --no-audit --no-fund` completed.
 - `npm run build` completed successfully after implementation.
+- Browser UI review confirmed the form advances and the selected country/state populates the dependent options.
 - No automated browser journey, accessibility audit, or cross-device visual checks were run.
 - Opened the local app in the browser, reviewed the registration screen, and confirmed the registration step advances. Confirmed that choosing India reveals the state/UT selector, Maharashtra reveals city choices, and the postal helper reflects India. This was a focused UI check, not a full end-to-end journey.
 
@@ -47,6 +48,7 @@
 - Demo account/session/profile values are held in browser localStorage; the mock OTP is held in memory and is never written there.
 - Demo passwords are held in memory only and are not written to localStorage. A browser refresh ends the demo credential flow.
 - The linked `dr5hn/countries-states-cities-database` project was reviewed. It is comprehensive and uses ODbL 1.0 with attribution, but its published full JSON export is large. This UI uses the separate offline `country-state-city` package snapshot instead; check its GPL-3.0 license before redistributing or deploying this app.
+- The lazily loaded city dataset adds an approximately 8 MB uncompressed build chunk (about 2.3 MB gzip); Vite reports a chunk-size warning. It is downloaded only when a state with city data is selected.
 - Phone number validation/normalization is not implemented; the UI only displays the selected country's calling code and accepts a number.
 - No real PAN/MSME validation, email delivery, backend, database, rate limiting, or persistent server session exists.
 
