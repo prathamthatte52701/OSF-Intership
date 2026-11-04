@@ -77,3 +77,13 @@
 4. Open the Vite URL. Registration emails are sent to the email entered in the form.
 
 Never commit `.env` or paste the Gmail App Password into chat. Production use still needs a chosen production database/hosting configuration and deployment security review.
+
+### Phase 11 — UI/UX audit and responsive refinement
+
+- Audited registration steps, review content, email verification/setup, login, password change, dashboard overview/profile/account/activity, navigation, theme controls, reusable fields/buttons, modal, toast, and location/phone selectors.
+- Increased body/helper/field text and control sizes, standardized corner radii and button/input treatment, improved mobile registration steps and dashboard navigation, and added visible keyboard focus plus reduced-motion handling.
+- Theme initializes from saved preference before paint; first visit remains Light. Added auth loading feedback and accessible required/error announcements.
+- Replaced the empty dashboard activity list with a clear empty state; no sample activity is presented as real activity.
+- Regression checks in browser: required-field validation announces errors; registration advances from company details to location; dark theme toggle updates the UI; login fields and navigation are exposed accessibly.
+- Build and `git diff --check` pass. No lint script is configured.
+- Responsive CSS includes breakpoints at 760px, 480px, 360px, and 1440px. The in-app browser did not expose an explicit viewport override in this session, so the requested exact viewport matrix (320, 375, 430, 768, 1024, 1440, 1920) was not individually measured. Browser visual review covered the available narrow in-app viewport. Full dashboard/auth regression requires backend/API or explicit mock mode; Gmail is not configured here.
