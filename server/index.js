@@ -35,7 +35,7 @@ app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeade
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const now = () => Date.now();
 const isoNow = () => new Date().toISOString();
-const config = { appOrigin: (process.env.APP_ORIGIN || 'http://localhost:5173').replace(/\/$/, '') };
+const config = { appOrigin: (process.env.APP_ORIGIN || 'http://localhost:3000').replace(/\/$/, '') };
 const cookieOptions = `HttpOnly; SameSite=Lax; Path=/; Max-Age=${sessionLifeMs / 1000}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
 
 function readCookie(req, name) {

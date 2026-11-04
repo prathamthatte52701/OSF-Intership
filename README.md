@@ -20,7 +20,7 @@ npm install
 npm run dev
 ```
 
-`npm run dev` starts both Vite and the API. Open the URL printed by Vite (usually `http://localhost:5173`). Stop both with `Ctrl+C`.
+`npm run dev` starts both Vite on port `3000` and the API on port `4000`. Open `http://localhost:3000`. Stop both with `Ctrl+C`.
 
 This runs registration and the UI locally. Real OTP/setup emails require Gmail settings in a root `.env`; without them the API reports that email delivery is unavailable.
 
