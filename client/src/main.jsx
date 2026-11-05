@@ -664,7 +664,7 @@ function App() {
   const isDashboard = page.startsWith('/dashboard');
   const progressLabels = ['Company Details', 'Business Location', 'Contact Information'];
 
-  const previewClass = previewSwitcherEnabled && previewMode === 'mobile' ? ' preview-mobile' : '';
+  const previewClass = previewSwitcherEnabled && previewMode === 'mobile' && page !== '/' ? ' preview-mobile' : '';
 
   if (page === '/') {
     return (
@@ -672,7 +672,6 @@ function App() {
         <div className="responsive-app-content">
           <LandingPage go={go} />
         </div>
-        {previewSwitcherEnabled && <ResponsivePreviewSwitcher mode={previewMode} onChange={setPreviewMode} />}
       </div>
     );
   }
