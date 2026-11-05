@@ -197,7 +197,7 @@ export default function LandingPage({ go }) {
               <a className="landing-text-link landing-text-link-dark" href="/contact" onClick={route('/contact')}>Talk with OSF</a>
             </div>
           </div>
-          <div className="landing-workshop-visual" aria-label="Illustrative company workshop setup preview">
+          <div className="landing-workshop-visual" role="group" aria-label="Illustrative company workshop setup preview">
             <div className="landing-workshop-window">
               <div className="landing-window-top"><span /><span /><span /><b>Company workshop</b></div>
               <div className="landing-workshop-app">
@@ -230,6 +230,18 @@ export default function LandingPage({ go }) {
           </div>
           <div className="landing-hackathon-card">
             <div className="landing-hackathon-card-head"><span>EVENT SNAPSHOT</span><span className="landing-complete-status"><i /> COMPLETED</span></div>
+            <div className="landing-event-art" aria-hidden="true">
+              <div className="landing-trophy-glow">
+                <svg viewBox="0 0 120 120" fill="none">
+                  <path d="M34 20h52v17c0 23-11 37-26 37S34 60 34 37V20Z" fill="url(#trophyGold)" />
+                  <path d="M34 29H19v10c0 15 9 24 22 25M86 29h15v10c0 15-9 24-22 25" stroke="#f6bd55" strokeWidth="7" strokeLinecap="round" />
+                  <path d="M53 74v16H39v10h42V90H67V74" fill="#d68a2a" />
+                  <path d="m60 30 3.8 8 8.8 1.3-6.3 6.1 1.5 8.7-7.8-4.1-7.8 4.1 1.5-8.7-6.3-6.1 8.8-1.3L60 30Z" fill="#fff3c2" />
+                  <defs><linearGradient id="trophyGold" x1="34" y1="20" x2="88" y2="73" gradientUnits="userSpaceOnUse"><stop stopColor="#ffe79a" /><stop offset=".48" stopColor="#f7b83f" /><stop offset="1" stopColor="#c97518" /></linearGradient></defs>
+                </svg>
+              </div>
+              <div><strong>OSF HackOne 2K26</strong><span>Build · collaborate · create</span></div>
+            </div>
             <div className="landing-hackathon-stats">
               <div><strong>48<small>h</small></strong><span>Build sprint</span></div>
               <div><strong>06</strong><span>Innovation tracks</span></div>
@@ -273,13 +285,13 @@ export default function LandingPage({ go }) {
             <p>Portfolios, clear project briefs, and practical challenges can make experience easier to understand—so students and organizations have more to discuss than a list of claims.</p>
             <a className="landing-text-link landing-text-link-dark" href="#how-it-works">How OSF works <LandingIcon name="arrow" size={16} /></a>
           </div>
-          <div className="landing-evidence-visual" aria-label="Illustration of a project brief and portfolio">
+          <div className="landing-evidence-visual" role="group" aria-label="Illustration of a project brief and portfolio">
             <div className="landing-evidence-profile">
               <div className="landing-evidence-profile-top"><span className="landing-profile-avatar">OS</span><span><strong>Creator profile</strong><small>Skills shown through work</small></span><span className="landing-profile-open">PORTFOLIO</span></div>
               <div className="landing-skill-tags"><span>Design</span><span>Research</span><span>Web</span></div>
               <div className="landing-evidence-project"><span className="landing-project-mark"><LandingIcon name="code" /></span><span><strong>Project sample</strong><small>A short description of the work and contribution.</small></span><LandingIcon name="arrow" size={15} /></div>
               <div className="landing-evidence-project"><span className="landing-project-mark landing-project-mark-gold"><LandingIcon name="spark" /></span><span><strong>Challenge response</strong><small>Context, approach, and what was learned.</small></span><LandingIcon name="arrow" size={15} /></div>
-              <p className="landing-evidence-note"><LandingIcon name="check" size={14} /> A clear view of the work, not an automated score.</p>
+              <p className="landing-evidence-note"><LandingIcon name="check" size={14} /> Examples that put skills in context.</p>
             </div>
             <div className="landing-evidence-float"><LandingIcon name="briefcase" size={18} /><span>Project brief</span><strong>Clear scope</strong></div>
           </div>
@@ -329,11 +341,12 @@ export default function LandingPage({ go }) {
             <p>India’s students and creators bring many languages and perspectives. OSF’s India-first vision includes making information and participation more accessible across them.</p>
             <p className="landing-language-note">Language access remains a priority as OSF continues to develop its platform.</p>
           </div>
-          <div className="landing-language-visual" aria-label="Illustration of multilingual collaboration">
-            <div className="landing-language-message landing-language-message-source"><span>PARTICIPANT</span><p>“I’ve finished the project design. Could you review it?”</p><small>English · project update</small></div>
-            <div className="landing-language-connector"><span>↕</span><i /></div>
-            <div className="landing-language-message landing-language-message-context"><span>SHARED CONTEXT</span><p>Clear communication helps collaborators understand the work and the next step.</p><small>Accessible collaboration</small></div>
-            <div className="landing-language-orbit">भारत <span>·</span> India <span>·</span> OSF</div>
+          <div className="landing-language-visual" role="group" aria-label="Illustrative language access interface concept">
+            <div className="landing-language-interface-head"><span>LANGUAGE ACCESS · CONCEPT PREVIEW</span><span>English <i>→</i> हिन्दी</span></div>
+            <div className="landing-language-message landing-language-message-source"><span>YOUR MESSAGE · ENGLISH</span><p>“I’ve finished the project design. Could you review it?”</p><small>Example project update</small></div>
+            <div className="landing-language-connector"><span>↓</span><i /></div>
+            <div className="landing-language-message landing-language-message-context"><span>HINDI · ILLUSTRATIVE EXAMPLE</span><p lang="hi">“मैंने प्रोजेक्ट डिज़ाइन पूरा कर लिया है। क्या आप इसकी समीक्षा कर सकते हैं?”</p><small>A concept for more accessible collaboration</small></div>
+            <div className="landing-language-options"><span>English</span><span>हिन्दी</span><span>தமிழ்</span><span>తెలుగు</span><span>বাংলা</span></div>
           </div>
         </section>
 

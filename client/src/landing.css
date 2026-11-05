@@ -624,9 +624,9 @@ html:has(.landing-page) { scroll-behavior: smooth; }
   --public-ink: #111a31;
   --public-muted: #65718a;
   --public-line: #e5eaf2;
-  --public-blue: #465dff;
-  --public-purple: #a43dff;
-  --public-orange: #fa6c18;
+  --public-blue: #2463eb;
+  --public-purple: #8055f6;
+  --public-orange: #f28a20;
   --public-green: #05a878;
   color: var(--public-ink);
   background: #fff;
@@ -717,3 +717,44 @@ html:has(.landing-page) { scroll-behavior: smooth; }
   .landing-proof-strip article { min-height: 75px; padding: 13px; }.landing-proof-strip strong { font-size: 18px; }.landing-section { padding: 60px 20px; }.landing-page .landing-section-heading h2, .landing-page .landing-workshop h2, .landing-page .landing-evidence h2, .landing-page .landing-language h2, .landing-page .landing-india h2, .landing-page .landing-final h2 { font-size: 34px; }.landing-journey-grid, .landing-ecosystem-grid, .landing-community-grid { grid-template-columns: 1fr; }.landing-journey-card { min-height: 130px; }.landing-journey-banner { padding: 22px; }.landing-journey-banner h3 { font-size: 20px; }.landing-workshop-visual { padding: 12px; }.landing-workshop-app { padding: 14px; }.landing-workshop-fields { grid-template-columns: 1fr; }.landing-hackathon-card { padding: 18px; }.landing-hackathon-stats { gap: 8px; }.landing-hackathon-stats > div { padding: 12px; }.landing-hackathon-stats strong { font-size: 27px; }.landing-evidence { gap: 20px; }.landing-evidence-profile { padding: 16px; }.landing-evidence-float { right: 0; }.landing-final-actions { flex-direction: column; align-items: stretch; }.landing-page .landing-final-actions > a { justify-content: center; }.landing-page .landing-footer { padding: 24px 20px; }
 }
 @media (prefers-reduced-motion: reduce) { .landing-page *, .landing-page *::before, .landing-page *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+
+/* Readability and desktop composition refinements. */
+.landing-journey-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.landing-journey-card { min-height: 174px; padding: 18px 15px; }
+.landing-journey-card h3 { font-size: 16px; }
+.landing-journey-card p, .landing-ecosystem-card p, .landing-opportunity-card p,
+.landing-process-card p, .landing-community-card p, .landing-india-grid p { font-size: 13px; }
+.landing-ecosystem-card h3, .landing-opportunity-card h3, .landing-process-card h3,
+.landing-community-card h3, .landing-india-grid h3 { font-size: 15px; }
+.landing-workshop-copy > p:not(.landing-eyebrow):not(.landing-kicker),
+.landing-evidence-copy > p:not(.landing-eyebrow):not(.landing-kicker),
+.landing-language-copy > p:not(.landing-eyebrow):not(.landing-kicker) { font-size: 15px; }
+.landing-feature-list small { font-size: 12px; }
+.landing-ecosystem-card p, .landing-opportunity-card p { min-height: 78px; }
+.landing-event-art { min-height: 122px; margin: 14px 0 4px; display: flex; align-items: center; justify-content: center; gap: 18px; border: 1px solid #334463; border-radius: 14px; background: radial-gradient(ellipse at 50% 100%, #38507a88, transparent 67%), #17233d; }
+.landing-trophy-glow { width: 100px; height: 100px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle, #f6bc383d, transparent 70%); }
+.landing-trophy-glow svg { width: 96px; height: 96px; filter: drop-shadow(0 8px 13px #f3a5244a); }
+.landing-event-art > div:last-child { display: flex; flex-direction: column; gap: 6px; }.landing-event-art strong { color: #fff; font-size: 16px; }.landing-event-art span { color: #b8c5dc; font-size: 11px; }
+.landing-hackathon-stats { margin: 12px 0 18px; }
+.landing-language-interface-head { margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #aebbe1; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.landing-language-interface-head > span:last-child { padding: 7px 10px; border: 1px solid #3c4964; border-radius: 8px; color: #fff; font-size: 10px; letter-spacing: 0; }.landing-language-interface-head i { margin-inline: 5px; color: #8d9cff; font-style: normal; }
+.landing-language-options { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }.landing-language-options span { padding: 6px 9px; border: 1px solid #3a465e; border-radius: 8px; color: #d5dded; background: #1b263c; font-size: 10px; }
+.landing-language-message p { font-size: 14px; }
+.landing-page .landing-button { font-size: 14px; }
+.landing-page .landing-navigation > a:not(.landing-button) { font-size: 14px; }
+.landing-page .landing-hero-visual { transform: none; margin-left: 0; }
+@media (min-width: 901px) {
+  .landing-page .landing-menu-toggle { display: none; }
+  .landing-page .landing-navigation { position: static; display: flex; flex-direction: row; align-items: center; gap: clamp(12px, 1.6vw, 23px); padding: 0; border: 0; box-shadow: none; }
+  .landing-page .landing-navigation > a:not(.landing-button) { padding: 8px 0; }
+  .landing-page .landing-navigation .landing-button { margin: 0; }
+  .landing-ecosystem-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .landing-community-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) { .landing-journey-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 480px) {
+  .landing-event-art { gap: 8px; }.landing-trophy-glow, .landing-trophy-glow svg { width: 76px; height: 76px; }
+  .landing-event-art strong { font-size: 13px; }.landing-event-art span { font-size: 10px; }
+  .landing-language-interface-head { align-items: flex-start; flex-direction: column; }
+  .landing-language-interface-head > span:last-child { align-self: flex-end; }
+}
