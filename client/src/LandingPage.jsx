@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import './landing.css';
 
 const solutions = [
-  { tag: 'TALENT', title: 'Talent Discovery & Hiring', text: 'Connect with emerging professionals and explore candidates for internships, freelance engagements and full-time opportunities.' },
-  { tag: 'REAL WORK', title: 'WorkDone Challenges', text: 'Evaluate practical abilities through real-world tasks and project-based challenges.' },
-  { tag: 'BRAND', title: 'Branded Challenges', text: 'Engage emerging talent with meaningful brand-led challenges and interactive campaigns.' },
-  { tag: 'PRODUCT', title: 'Product Testing Sprints', text: 'Gather structured feedback and fresh perspectives on products, websites and digital experiences.' },
-  { tag: 'ASSESSMENT', title: 'Assessment-as-a-Service', text: 'Support candidate evaluation with structured assessments and skill-based interviews.' },
+  { tag: 'TALENT', title: 'Talent Discovery & Hiring', text: 'Find candidates for internships, full-time roles, freelance work and paid projects through practical skills and demonstrated capabilities.' },
+  { tag: 'REAL WORK', title: 'WorkDone Challenges', text: 'Evaluate real-world execution with practical challenges in design, video editing, content, marketing and other disciplines.' },
+  { tag: 'BRAND', title: 'Branded Challenges', text: 'Introduce products and services through interactive student challenges that invite participation and build brand engagement.' },
+  { tag: 'PRODUCT', title: 'Product Testing Sprints', text: 'Collect structured usability feedback on apps, SaaS products, websites, prototypes and other digital experiences.' },
+  { tag: 'ASSESSMENT', title: 'Assessment-as-a-Service', text: 'Evaluate existing candidates with structured assessments and interviews that measure relevant skills.' },
+  { tag: 'CUSTOM', title: 'Custom Engagements', text: 'Shape a tailored program around company goals, target audiences and requirements, with flexible formats and deliverables.' },
 ];
 
 const steps = [
@@ -106,6 +107,7 @@ export default function LandingPage({ go }) {
               <p>{item.text}</p>
             </article>)}
           </div>
+          <p className="landing-participation-note">Students participate free of charge. Engagement formats and deliverables are tailored to each company’s objectives.</p>
         </section>
 
         <section className="landing-process" id="how-it-works" aria-labelledby="process-title">

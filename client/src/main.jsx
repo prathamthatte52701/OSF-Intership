@@ -45,6 +45,22 @@ function Icon({ name, size = 18, ...props }) {
   );
 }
 
+const previewSwitcherEnabled = import.meta.env.DEV || import.meta.env.VITE_UI_PREVIEW === 'true';
+
+function ResponsivePreviewSwitcher({ mode, onChange }) {
+  return (
+    <div className="responsive-preview-switcher" role="group" aria-label="Responsive preview size">
+      <span className="responsive-preview-label">Preview</span>
+      <button type="button" aria-pressed={mode === 'desktop'} onClick={() => onChange('desktop')}>
+        Desktop View
+      </button>
+      <button type="button" aria-pressed={mode === 'mobile'} onClick={() => onChange('mobile')}>
+        Mobile View
+      </button>
+    </div>
+  );
+}
+
 const EMPTY_FORM = {
   company: '',
   pan: '',
@@ -114,6 +130,7 @@ function toUiProfile(company) {
 
 function App() {
   const [page, setPage] = useState(startPath);
+  const [previewMode, setPreviewMode] = useState('desktop');
   const [dark, setDark] = useState(() => {
     try {
       const q = new URLSearchParams(location.search).get('theme');
@@ -647,10 +664,23 @@ function App() {
   const isDashboard = page.startsWith('/dashboard');
   const progressLabels = ['Company Details', 'Business Location', 'Contact Information'];
 
-  if (page === '/') return <LandingPage go={go} />;
+  const previewClass = previewSwitcherEnabled && previewMode === 'mobile' ? ' preview-mobile' : '';
+
+  if (page === '/') {
+    return (
+      <div className={`responsive-app-frame${previewClass}`}>
+        <div className="responsive-app-content">
+          <LandingPage go={go} />
+        </div>
+        {previewSwitcherEnabled && <ResponsivePreviewSwitcher mode={previewMode} onChange={setPreviewMode} />}
+      </div>
+    );
+  }
 
   return (
-    <div className={`app-shell ${isDashboard ? 'dashboard-shell' : ''}`}>
+    <div className={`responsive-app-frame${previewClass}`}>
+      <div className="responsive-app-content">
+      <div className={`app-shell ${isDashboard ? 'dashboard-shell' : ''}`}>
       {/* Desktop Brand Panel for Registration & Auth */}
       {!isDashboard && (
         <aside className="brand-panel">
@@ -1550,6 +1580,9 @@ function App() {
           </div>
         </div>
       )}
+      </div>
+      </div>
+      {previewSwitcherEnabled && <ResponsivePreviewSwitcher mode={previewMode} onChange={setPreviewMode} />}
     </div>
   );
 }

@@ -126,6 +126,7 @@ Environment variable reference:
 | --- | --- |
 | `PORT` | Express API port. Defaults to `4000`. |
 | `VITE_AUTH_MODE` | Use `api` for backend authentication. The explicit `mock` value selects the browser demo mode. |
+| `VITE_UI_PREVIEW` | Set to `true` only for an explicitly enabled preview build to show the Desktop/Mobile preview switcher; Vite development shows it automatically. |
 | `DATABASE_PATH` | SQLite database path, relative to the repository root when configured. |
 | `APP_ORIGIN` | Frontend origin used to create password setup links. |
 | `EMAIL_USER` | Gmail account used as the sender. |
