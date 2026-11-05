@@ -62,7 +62,33 @@ export default function LandingPage({ go }) {
             </div>
             <p className="landing-hero-note">A platform for companies and emerging talent</p>
           </div>
-          <div className="landing-hero-mark" aria-hidden="true"><span>OSF</span><i>O</i><i>S</i><i>F</i><b>BUILD<br />TOGETHER</b></div>
+          <div className="landing-hero-visual" aria-hidden="true">
+            <div className="landing-visual-orbit landing-visual-orbit-one" />
+            <div className="landing-visual-orbit landing-visual-orbit-two" />
+            <div className="landing-visual-node landing-visual-node-one" />
+            <div className="landing-visual-node landing-visual-node-two" />
+            <div className="landing-visual-card landing-visual-card-talent">
+              <span className="landing-visual-icon">01</span>
+              <span className="landing-visual-label">TALENT</span>
+              <strong>Talent discovery<br />&amp; hiring</strong>
+              <span className="landing-visual-detail"><i /> Internships · Freelance · Full-time</span>
+            </div>
+            <div className="landing-visual-card landing-visual-card-challenges">
+              <span className="landing-visual-icon">02</span>
+              <span className="landing-visual-label">REAL WORK</span>
+              <strong>WorkDone<br />challenges</strong>
+            </div>
+            <div className="landing-visual-card landing-visual-card-product">
+              <span className="landing-visual-icon">03</span>
+              <span className="landing-visual-label">PRODUCT</span>
+              <strong>Product testing<br />sprints</strong>
+            </div>
+            <div className="landing-visual-card landing-visual-card-assessment">
+              <span className="landing-visual-label">ASSESSMENT</span>
+              <strong>Skill-based review</strong>
+            </div>
+            <div className="landing-visual-brand">OSF</div>
+          </div>
           <a className="landing-scroll-cue" href="#solutions" aria-label="Scroll to solutions">↓</a>
         </section>
 
@@ -80,19 +106,6 @@ export default function LandingPage({ go }) {
               <p>{item.text}</p>
             </article>)}
           </div>
-        </section>
-
-        <section className="landing-showcase" aria-labelledby="showcase-title">
-          <div className="landing-showcase-copy">
-            <p className="landing-eyebrow"><span /> A CLOSER LOOK</p>
-            <h2 id="showcase-title">One platform.<br />Multiple ways to collaborate.</h2>
-            <p>Explore how OSF brings talent discovery, practical challenges and business collaboration together.</p>
-          </div>
-          <figure className="landing-browser-frame">
-            <div className="landing-browser-bar"><span /><span /><span /><b>OSF Insider · Company solutions</b></div>
-            <img src="/images/osf-insider-reference.jpeg" alt="OSF Insider company solutions page showing talent discovery, WorkDone challenges, branded challenges, product testing and assessments." />
-            <figcaption>OSF Insider · Company solutions concept</figcaption>
-          </figure>
         </section>
 
         <section className="landing-process" id="how-it-works" aria-labelledby="process-title">
