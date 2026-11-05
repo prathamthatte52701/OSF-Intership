@@ -615,6 +615,22 @@ function App() {
         target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
       );
 
+      if (event.key === 'Escape') {
+        if (showPassword) {
+          setShowPassword(false);
+          return;
+        }
+        if (showSetupRecovery) {
+          setShowSetupRecovery(false);
+          return;
+        }
+        if (!isEditable && page !== '/' && history.state?.osfPortalRoute && history.state.depth > 0) {
+          event.preventDefault();
+          history.back();
+        }
+        return;
+      }
+
       if (event.key === 'Backspace' && !isEditable && history.state?.osfPortalRoute && history.state.depth > 0) {
         event.preventDefault();
         history.back();
@@ -640,7 +656,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyboardShortcuts);
     return () => window.removeEventListener('keydown', handleKeyboardShortcuts);
-  }, [page, step, busy]);
+  }, [page, step, busy, showPassword, showSetupRecovery]);
 
   async function logout() {
     try {
@@ -670,7 +686,7 @@ function App() {
     return (
       <div className={`responsive-app-frame${previewClass}`}>
         <div className="responsive-app-content">
-          <LandingPage go={go} />
+          <LandingPage go={go} dark={dark} onToggleTheme={() => setDark(value => !value)} />
         </div>
       </div>
     );

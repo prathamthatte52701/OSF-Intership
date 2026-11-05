@@ -8,6 +8,7 @@ const iconPaths = {
   graduation: ['M2 10l10-5 10 5-10 5L2 10Z', 'M6 12v5c3 2.5 9 2.5 12 0v-5', 'M22 10v6'],
   code: ['m8 8-4 4 4 4', 'm16 8 4 4-4 4', 'm14 5-4 14'],
   globe: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z', 'M2 12h20', 'M12 2a15 15 0 0 1 0 20', 'M12 2a15 15 0 0 0 0 20'],
+  moon: ['M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z'],
   people: ['M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M20 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
   trophy: ['M8 21h8', 'M12 17v4', 'M7 4h10v5a5 5 0 0 1-10 0V4Z', 'M7 6H4v3a4 4 0 0 0 4 4', 'M17 6h3v3a4 4 0 0 1-4 4'],
   star: ['m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z'],
@@ -15,6 +16,7 @@ const iconPaths = {
   compass: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z', 'm16.2 7.8-2.7 5.7-5.7 2.7 2.7-5.7 5.7-2.7Z'],
   check: ['m5 12 4 4L19 6'],
   shield: ['M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z', 'm9 12 2 2 4-4'],
+  sun: ['M12 2v2', 'M12 20v2', 'm4.93 4.93 1.42 1.42', 'm17.65 17.65 1.42 1.42', 'M2 12h2', 'M20 12h2', 'm4.93 19.07 1.42-1.42', 'm17.65 6.35 1.42-1.42', 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z'],
   payment: ['M3 6h18v12H3z', 'M3 10h18', 'M7 15h3'],
   arrow: ['M5 12h14', 'm12 5 7 7-7 7'],
 };
@@ -32,7 +34,7 @@ const nav = [
   ['Events', '#hackathon'],
   ['Opportunities', '#opportunities'],
   ['For Business', '#business'],
-  ['Pricing', '/contact'],
+  ['Pricing', '#pricing'],
   ['About', '#community'],
 ];
 
@@ -94,10 +96,9 @@ const indiaFeatures = [
   ['payment', 'Instant UPI', 'Payments reach you in seconds—not weeks.'],
   ['graduation', 'Campus-to-Career', 'Launch your career with paid student internships.'],
   ['people', 'Indore City Clubs', 'Network offline in Madhya Pradesh and beyond.'],
-  ['code', 'OSF Mobile App', 'Coming early 2025'],
 ];
 
-export default function LandingPage({ go }) {
+export default function LandingPage({ go, dark, onToggleTheme }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const route = path => event => {
     event.preventDefault();
@@ -128,6 +129,9 @@ export default function LandingPage({ go }) {
           {nav.map(([label, href]) => href.startsWith('#')
             ? <a key={label} href={href} onClick={closeMenu}>{label}</a>
             : <a key={label} href={href} onClick={route(href)}>{label}</a>)}
+          <button className="landing-theme-toggle" type="button" onClick={onToggleTheme} aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`}>
+            <LandingIcon name={dark ? 'sun' : 'moon'} size={16} /><span>{dark ? 'Light' : 'Dark'} mode</span>
+          </button>
           <a className="landing-login" href="/login" onClick={route('/login')}>Log in</a>
           <a className="landing-button landing-button-small" href="/register" onClick={route('/register')}>Join Now <span aria-hidden="true">↗</span></a>
         </nav>
@@ -154,13 +158,6 @@ export default function LandingPage({ go }) {
               <article><span className="landing-metric-icon"><LandingIcon name="star" size={18} /></span><div><strong>₹0</strong><small>Cost to students</small><em>Always free to join</em></div></article>
             </div>
             <p className="landing-event-proof"><span aria-hidden="true">●</span> We successfully conducted a <a href="#hackathon">National-Level Hackathon</a> — 300+ teams · 28 states · 280 cities <b>OSF HackOne 2K26 verified</b></p>
-          </div>
-          <div className="landing-hero-visual">
-            <span className="landing-hero-glow" aria-hidden="true" />
-            <img src="/landing/hero-student.webp" alt="Student creator with a laptop" />
-            <span className="landing-hero-float landing-hero-float-jobs"><LandingIcon name="briefcase" /> Find jobs &<br />internships</span>
-            <span className="landing-hero-float landing-hero-float-event"><LandingIcon name="trophy" /> Join<br />Hackathons</span>
-            <span className="landing-hero-float landing-hero-float-skills"><LandingIcon name="star" /> Showcase<br />your skills</span>
           </div>
         </section>
 
@@ -209,11 +206,10 @@ export default function LandingPage({ go }) {
             <h2 id="workshop-title">Host Your Own<br /><span>Company Workshop.</span></h2>
             <p>Bring your expertise to the next generation. Register your organisation, create professional workshops and share valuable knowledge through interactive learning experiences.</p>
             <div className="landing-workshop-features">
-              {workshopFeatures.map(([icon, title, text]) => <article key={title}><LandingIcon name={icon} size={17} /><div><strong>{title}</strong><span>{text}</span></div></article>)}
+              {workshopFeatures.map(([icon, title, text]) => <article id={title === 'Pricing Control' ? 'pricing' : undefined} key={title}><LandingIcon name={icon} size={17} /><div><strong>{title}</strong><span>{text}</span></div></article>)}
             </div>
             <div className="landing-actions"><a className="landing-button" href="/register" onClick={route('/register')}>Register Your Company <LandingIcon name="arrow" size={16} /></a><span>Simple 4-step registration</span></div>
           </div>
-          <div className="landing-workshop-visual"><img src="/landing/workshop-dashboard.webp" alt="Company workshop registration portal preview" /></div>
         </section>
 
         <section className="landing-hackathon landing-section" id="hackathon" aria-labelledby="hackathon-title">
@@ -240,7 +236,7 @@ export default function LandingPage({ go }) {
               <p className="landing-panel-footnote">Powered by Our Startup Freelancer evaluation systems</p>
             </article>
             <article className="landing-prize-panel">
-              <div className="landing-prize-art"><img src="/landing/hackathon-trophy.webp" alt="OSF Hackathon trophy" /></div>
+              <span className="landing-prize-mark"><LandingIcon name="trophy" size={24} /></span>
               <p className="landing-eyebrow landing-eyebrow-pill"><span className="landing-eyebrow-dot" /> GRAND REWARD POOL</p>
               <h3>₹50,000+ Prize Package</h3>
               <p>Alongside direct cash rewards, qualifying participants receive credit assessments, student ambassador invitations, customized swag kits, and premium proctored credentials.</p>
@@ -252,7 +248,7 @@ export default function LandingPage({ go }) {
                 <li><LandingIcon name="check" size={14} /> Access to Verified INR Project Contracts</li>
               </ul>
               <a className="landing-button landing-button-dark" href="https://osfhackathon.in/" target="_blank" rel="noreferrer">Register for OSF Hackathon <LandingIcon name="arrow" size={15} /></a>
-              <small className="landing-registration-note">Registration deadline approaching · Open Pan-India</small>
+              <small className="landing-registration-note">Open Pan-India</small>
             </article>
           </div>
         </section>
@@ -295,7 +291,6 @@ export default function LandingPage({ go }) {
             </div>
             <div className="landing-opportunity-stats"><div><strong>5,000+</strong><span>Students participating</span></div><div><strong>100+</strong><span>Colleges represented</span></div><div><strong>Pan-India</strong><span>Geographic reach</span></div><div><strong>₹0</strong><span>Cost to students</span></div></div>
           </div>
-          <img className="landing-opportunity-art" src="/landing/creator-student.webp" alt="Student creator working on a laptop" />
         </section>
 
         <section className="landing-why landing-section" aria-labelledby="why-title">
