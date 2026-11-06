@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { companyApi } from './companyApi.js';
+import { useDialog } from '../ui/useDialog.js';
 
 const FILTERS = ['All', 'Draft', 'Published', 'Closed'];
 const STATUS_LABEL = { DRAFT: 'DRAFT', PUBLISHED: 'PUBLISHED', CLOSED: 'CLOSED' };
@@ -17,28 +18,19 @@ function fmtLocal(iso) {
   }
 }
 
-function PublishCloseConfirm({ action, onConfirm, onCancel }) {
-  const confirmRef = useRef(null);
+function PublishCloseConfirm({ action, busy, onConfirm, onCancel }) {
+  const ref = useDialog({ onCancel, busy });
   const text = action === 'publish'
     ? 'Publishing makes this challenge visible to students immediately. They will be able to apply right away.'
     : 'Closing stops new applications right away. Students who already applied can still submit until their own individual deadline.';
 
-  useEffect(() => {
-    confirmRef.current?.focus();
-    const handleKeyDown = event => {
-      if (event.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onCancel]);
-
   return (
-    <div className="confirm-dialog-overlay" role="dialog" aria-modal="true">
-      <div className="confirm-dialog">
-        <p>{text}</p>
+    <div className="confirm-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="publish-close-text">
+      <div className="confirm-dialog" ref={ref}>
+        <p id="publish-close-text">{text}</p>
         <div className="confirm-dialog-actions">
-          <button className="btn btn-outline btn-sm" onClick={onCancel}>Cancel</button>
-          <button ref={confirmRef} className="btn btn-primary btn-sm" onClick={onConfirm}>
+          <button className="btn btn-outline btn-sm" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button className="btn btn-primary btn-sm" onClick={onConfirm} disabled={busy}>
             {action === 'publish' ? 'Publish challenge' : 'Close challenge'}
           </button>
         </div>
@@ -200,6 +192,7 @@ export default function LiveChallengePage({ go }) {
       {confirmState && (
         <PublishCloseConfirm
           action={confirmState.action}
+          busy={busyId === confirmState.id}
           onCancel={() => setConfirmState(null)}
           onConfirm={() => runAction(confirmState.id, confirmState.action)}
         />

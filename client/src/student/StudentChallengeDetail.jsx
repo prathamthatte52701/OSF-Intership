@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { studentApi } from './studentApi.js';
+import { useDialog } from '../ui/useDialog.js';
 import { errorMessage, StatusPill } from './StudentUI.jsx';
 import './student-challenge-detail.css';
 
@@ -21,22 +22,7 @@ function countdown(closes, now) {
 }
 
 function ConfirmDialog({ challenge, busy, error, onConfirm, onCancel }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const previous = document.activeElement;
-    ref.current?.querySelector('button.scd-primary')?.focus();
-    const onKey = event => {
-      if (event.key === 'Escape' && !busy) onCancel();
-      if (event.key === 'Tab') {
-        const items = [...ref.current.querySelectorAll('button:not(:disabled)')];
-        const first = items[0]; const last = items[items.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('keydown', onKey); previous?.focus?.(); };
-  }, [busy, onCancel]);
+  const ref = useDialog({ onCancel, busy, initialFocus: 'button.scd-primary' });
   const deadline = Date.now() + challenge.individualTaskDurationDays * DAY;
   return <div className="scd-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !busy) onCancel(); }}>
     <div className="scd-dialog" role="dialog" aria-modal="true" aria-labelledby="scd-dialog-title" ref={ref}>

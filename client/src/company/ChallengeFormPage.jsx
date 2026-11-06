@@ -142,7 +142,8 @@ function validate(form) {
   if (!description) errors.taskDescription = 'Task description is required.';
   else if (description.length > LIMITS.taskDescription) errors.taskDescription = `Task description must be ${LIMITS.taskDescription} characters or fewer.`;
 
-  if (form.requiredSkills.length > LIMITS.skillCount) errors.requiredSkills = `Up to ${LIMITS.skillCount} skills allowed.`;
+  if (!form.requiredSkills.length) errors.requiredSkills = 'Add at least one required skill.';
+  else if (form.requiredSkills.length > LIMITS.skillCount) errors.requiredSkills = `Up to ${LIMITS.skillCount} skills allowed.`;
 
   if (form.reference && form.reference.length > LIMITS.reference) errors.reference = `Reference must be ${LIMITS.reference} characters or fewer.`;
   if (form.language && form.language.length > LIMITS.language) errors.language = `Language must be ${LIMITS.language} characters or fewer.`;
@@ -196,14 +197,15 @@ function buildPayload(form) {
   };
 }
 
-function Field({ label, error, hint, children }) {
+function Field({ label, error, hint, children, htmlFor }) {
+  const Wrapper = htmlFor ? 'div' : 'label';
   return (
-    <label className="cp-field">
-      <span>{label}</span>
+    <Wrapper className="cp-field">
+      {htmlFor ? <label htmlFor={htmlFor}><span>{label}</span></label> : <span>{label}</span>}
       {children}
       {hint && !error && <small>{hint}</small>}
       {error && <small className="cp-field-error">{error}</small>}
-    </label>
+    </Wrapper>
   );
 }
 
@@ -477,7 +479,7 @@ export default function ChallengeFormPage({ go, challengeId }) {
             />
           </Field>
 
-          <Field label="Required skills" error={showError('requiredSkills')} hint={`${form.requiredSkills.length} / ${LIMITS.skillCount} skills`}>
+          <Field label="Required skills" htmlFor="cp-skill-input" error={showError('requiredSkills')} hint={`${form.requiredSkills.length} / ${LIMITS.skillCount} skills`}>
             <div className="cp-chip-input">
               {form.requiredSkills.map(skill => (
                 <span key={skill} className="chip chip-removable">
@@ -486,6 +488,7 @@ export default function ChallengeFormPage({ go, challengeId }) {
                 </span>
               ))}
               <input
+                id="cp-skill-input"
                 value={skillInput}
                 onChange={e => setSkillInput(e.target.value)}
                 onKeyDown={handleSkillKeyDown}

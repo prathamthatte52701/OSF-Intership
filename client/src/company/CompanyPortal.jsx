@@ -43,6 +43,14 @@ const MODULES = [
   { name: 'Company Profile', icon: 'Building2', path: '/dashboard/company' },
 ];
 
+const KNOWN_ROUTES = [
+  /^\/dashboard\/challenges$/, /^\/dashboard\/challenges\/new$/, /^\/dashboard\/challenges\/[^/]+\/edit$/, /^\/dashboard\/challenges\/[^/]+\/applicants$/,
+  /^\/dashboard\/applications\/[^/]+$/, /^\/dashboard\/students\/[^/]+$/,
+  /^\/dashboard\/skills$/, /^\/dashboard\/skills\/new$/, /^\/dashboard\/skills\/[^/]+\/edit$/, /^\/dashboard\/skills\/[^/]+\/attempts$/, /^\/dashboard\/skills\/[^/]+\/attempts\/[^/]+$/,
+  /^\/dashboard\/talent$/, /^\/dashboard\/company$/, /^\/dashboard\/account$/,
+];
+const HOME_ALIASES = new Set(['/dashboard', '/dashboard/activity']);
+
 function moduleForPath(path) {
   // applicant review pages live under the Live Challenge module
   if (/^\/dashboard\/(applications|students)\/[^/]+$/.test(path)) return MODULES[0];
@@ -67,12 +75,13 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
   const activeModule = moduleForPath(path);
   const [challengeSummary, setChallengeSummary] = React.useState(null);
 
+  const cleanPath = path.length > 1 ? path.replace(/\/+$/, '') : path;
+  const isHomeAlias = HOME_ALIASES.has(cleanPath);
+  const isKnownRoute = KNOWN_ROUTES.some(route => route.test(cleanPath));
+
   React.useEffect(() => {
-    const redirectTargets = new Set(['/dashboard', '/dashboard/activity']);
-    if (redirectTargets.has(path) || (path.startsWith('/dashboard') && path !== '/dashboard/account' && !path.startsWith('/dashboard/account/') && !activeModule)) {
-      history.replaceState(history.state, '', '/dashboard/challenges');
-      go('/dashboard/challenges');
-    }
+    // One logical navigation = one history entry: replace, never replaceState + push.
+    if (isHomeAlias) go('/dashboard/challenges', { replace: true });
   }, [path]);
 
   React.useEffect(() => {
@@ -85,7 +94,7 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
       .catch(() => {});
   }, [path]);
 
-  const title = path === '/dashboard/account' ? 'Account Information' : activeModule?.name || 'Live Challenge';
+  const title = !isKnownRoute && !isHomeAlias ? 'Page not found' : path === '/dashboard/account' ? 'Account Information' : activeModule?.name || 'Live Challenge';
 
   const subtitle = (() => {
     if (path === '/dashboard/account') return 'Sign-in and contact details for your OSF enterprise account.';
@@ -195,6 +204,15 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
 
         {/* Dashboard Body Area */}
         <div className="dash-body">
+          {!isKnownRoute && !isHomeAlias && (
+            <div className="dash-card">
+              <div className="empty-state-box" role="alert">
+                <strong>Page not found</strong>
+                <p>We couldn&rsquo;t find that page in your workspace.</p>
+                <a className="btn btn-primary btn-sm" href="/dashboard/challenges" onClick={e => { e.preventDefault(); go('/dashboard/challenges'); }}>Back to dashboard</a>
+              </div>
+            </div>
+          )}
           {path === '/dashboard/challenges' && <LiveChallengePage go={go} />}
           {(path === '/dashboard/challenges/new' || /^\/dashboard\/challenges\/[^/]+\/edit$/.test(path)) && (
             <ChallengeFormPage

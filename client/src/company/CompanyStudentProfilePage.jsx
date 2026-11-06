@@ -1,20 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { companyApi } from './companyApi.js';
+import { useDialog } from '../ui/useDialog.js';
 import { Crumbs, Skeleton, LoadError, StatusPill, fmtDate, loadFailure } from './applicantsShared.jsx';
 
 function UnsaveConfirm({ name, onConfirm, onCancel, busy }) {
-  useEffect(() => {
-    const onKey = e => { if (e.key === 'Escape') onCancel(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  const ref = useDialog({ onCancel, busy });
   return (
-    <div className="confirm-dialog-overlay" role="dialog" aria-modal="true">
-      <div className="confirm-dialog">
-        <p>Remove {name} from your saved students? Your note about them will be deleted. You can save them again later.</p>
+    <div className="confirm-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="unsave-dialog-text">
+      <div className="confirm-dialog" ref={ref}>
+        <p id="unsave-dialog-text">Remove {name} from your saved students? Your note about them will be deleted. You can save them again later.</p>
         <div className="confirm-dialog-actions">
-          <button type="button" className="btn btn-outline btn-sm" onClick={onCancel}>Cancel</button>
-          <button type="button" autoFocus className="btn btn-primary btn-sm" disabled={busy} onClick={onConfirm}>Remove student</button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={onConfirm}>Remove student</button>
         </div>
       </div>
     </div>
