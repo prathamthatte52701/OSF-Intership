@@ -195,7 +195,9 @@ function challengeSkills(db, challengeId) {
 function challengeView(db, challenge) {
   const row = { ...challenge, requiredSkills: challengeSkills(db, challenge.id) };
   return {
-    id: row.id, companyId: row.company_id, roleTitle: row.role_title, reference: row.reference,
+    id: row.id, companyId: row.company_id,
+    ...(row.company_name == null ? {} : { companyName: row.company_name }),
+    roleTitle: row.role_title, reference: row.reference,
     taskDescription: row.task_description, requiredSkills: row.requiredSkills, language: row.language,
     extraInformation: row.extra_information, isPaid: Boolean(row.is_paid), compensationDetails: row.compensation_details,
     candidateCount: row.candidate_count, applicationOpensAt: row.application_opens_at,
@@ -355,8 +357,9 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     if (!result.changes) throw new InputError('Project not found.', 404);
     res.json({ deleted: true });
   });
-  router.get('/students/:id', (req, res) => {
-    const profile = studentProfile(db, req.params.id);
+  router.get('/students/:id', studentAuth, (req, res) => {
+    if (req.student.student_id !== req.params.id) throw new InputError('You may view only your own student profile.', 403);
+    const profile = studentProfile(db, req.params.id, { privateFields: true });
     if (!profile) throw new InputError('Student profile not found.', 404);
     res.json({ profile });
   });
@@ -370,11 +373,13 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
       clauses.push(`EXISTS (SELECT 1 FROM challenge_skills cs WHERE cs.challenge_id=c.id AND cs.skill IN (${skills.map(() => '?').join(',')} COLLATE NOCASE))`);
       params.push(...skills);
     }
-    const rows = db.prepare(`SELECT c.* FROM challenges c WHERE ${clauses.join(' AND ')} ORDER BY c.application_closes_at ASC LIMIT 100`).all(...params);
+    const rows = db.prepare(`SELECT c.*,co.company_name AS company_name FROM challenges c
+      JOIN companies co ON co.id=c.company_id WHERE ${clauses.join(' AND ')} ORDER BY c.application_closes_at ASC LIMIT 100`).all(...params);
     res.json({ challenges: rows.map(row => challengeView(db, row)) });
   });
   router.get('/challenges/:id', (req, res) => {
-    const row = db.prepare("SELECT * FROM challenges WHERE id=? AND status='PUBLISHED'").get(req.params.id);
+    const row = db.prepare(`SELECT c.*,co.company_name AS company_name FROM challenges c
+      JOIN companies co ON co.id=c.company_id WHERE c.id=? AND c.status='PUBLISHED'`).get(req.params.id);
     if (!row) throw new InputError('Challenge not found.', 404);
     res.json({ challenge: challengeView(db, row) });
   });

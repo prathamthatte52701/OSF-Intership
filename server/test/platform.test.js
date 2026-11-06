@@ -76,9 +76,20 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal(profileResponse.status, 200);
   const studentId = profileResponse.body.profile.id;
   assert.deepEqual(profileResponse.body.profile.skills, ['JavaScript', 'SQLite']);
+  assert.equal((await request(`/api/students/${studentId}`)).status, 401);
+  const ownProfile = await request(`/api/students/${studentId}`, { cookie: studentCookie });
+  assert.equal(ownProfile.status, 200);
+  assert.equal(ownProfile.body.profile.resumeReference, 'https://example.com/aarav-resume.pdf');
+  assert.equal('email' in ownProfile.body.profile, false);
+  const secondAccountId = newId(); const secondStudentId = newId(); const secondCreated = new Date().toISOString();
+  db.prepare(`INSERT INTO student_users(id,email,password_hash,email_verified,account_status,password_created_at,updated_at,created_at)
+    VALUES (?,'another-student@example.com','test-hash',1,'ACTIVE',?,?,?)`).run(secondAccountId, secondCreated, secondCreated, secondCreated);
+  db.prepare(`INSERT INTO students(id,account_id,full_name,created_at,updated_at) VALUES (?,?,?, ?,?)`)
+    .run(secondStudentId, secondAccountId, 'Another Student', secondCreated, secondCreated);
+  assert.equal((await request(`/api/students/${secondStudentId}`, { cookie: studentCookie })).status, 403);
   const project = await request('/api/student/projects', { method: 'POST', cookie: studentCookie, body: { title: 'Open Source Tool', projectUrl: 'https://example.com/project' } });
   assert.equal(project.status, 201);
-  assert.equal((await request(`/api/students/${studentId}`)).body.profile.projects.length, 1);
+  assert.equal((await request(`/api/students/${studentId}`, { cookie: studentCookie })).body.profile.projects.length, 1);
 
   const now = Date.now();
   const challengeResponse = await request('/api/company/challenges', { method: 'POST', cookie: company.cookie, body: {
@@ -89,7 +100,20 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal(challengeResponse.status, 201);
   const challengeId = challengeResponse.body.challenge.id;
   assert.equal((await request(`/api/company/challenges/${challengeId}/publish`, { method: 'POST', cookie: company.cookie })).status, 200);
-  assert.equal((await request('/api/challenges')).body.challenges.length, 1);
+  db.prepare('UPDATE companies SET company_name=? WHERE id=?').run('Actual Company Name', 'company-one');
+  const publicChallenges = await request('/api/challenges');
+  assert.equal(publicChallenges.body.challenges.length, 1);
+  assert.equal(publicChallenges.body.challenges[0].companyName, 'Actual Company Name');
+  assert.equal(publicChallenges.body.challenges[0].companyId, 'company-one');
+  assert.equal(publicChallenges.body.challenges[0].roleTitle, 'Frontend Challenge');
+  assert.equal(publicChallenges.body.challenges[0].taskDescription, 'Build a small responsive page.');
+  const publicChallenge = await request(`/api/challenges/${challengeId}`);
+  assert.equal(publicChallenge.body.challenge.companyName, 'Actual Company Name');
+  assert.equal(publicChallenge.body.challenge.requiredSkills.includes('JavaScript'), true);
+  db.prepare("UPDATE challenges SET status='DRAFT' WHERE id=?").run(challengeId);
+  assert.equal((await request('/api/challenges')).body.challenges.length, 0);
+  assert.equal((await request(`/api/challenges/${challengeId}`)).status, 404);
+  db.prepare("UPDATE challenges SET status='PUBLISHED' WHERE id=?").run(challengeId);
   const applicationResponse = await request(`/api/student/challenges/${challengeId}/applications`, { method: 'POST', cookie: studentCookie, body: {} });
   assert.equal(applicationResponse.status, 201);
   const application = applicationResponse.body.application;
@@ -103,6 +127,7 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal(changedChallenge.body.challenge.individualTaskDurationDays, 5);
   assert.equal(db.prepare('SELECT individual_deadline FROM applications WHERE id=?').get(application.id).individual_deadline, application.individualDeadline);
   assert.equal((await request(`/api/company/challenges/${challengeId}/close`, { method: 'POST', cookie: company.cookie })).status, 200);
+  assert.equal((await request('/api/challenges')).body.challenges.length, 0);
   assert.equal((await request(`/api/challenges/${challengeId}`)).status, 404);
 
   const upload = await request(`/api/student/applications/${application.id}/file`, {
@@ -161,6 +186,11 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal(talent.body.students[0].matchCount, 1);
   assert.deepEqual(talent.body.students[0].matchedSkills, ['JavaScript']);
   assert.equal(talent.body.students[0].resumeReference, 'https://example.com/aarav-resume.pdf');
+  assert.equal((await request(`/api/company/talent/${studentId}`)).status, 401);
+  assert.equal((await request(`/api/company/talent/${studentId}`, { cookie: company.cookie })).status, 200);
+  assert.equal((await request(`/api/company/talent/${studentId}`, { cookie: otherCompany.cookie })).status, 200);
   assert.equal((await request(`/api/company/saved-students/${studentId}`, { method: 'POST', cookie: company.cookie, body: { note: 'Good fit.' } })).status, 201);
+  assert.equal((await request(`/api/company/saved-students/${secondStudentId}`, { method: 'POST', cookie: otherCompany.cookie, body: { note: 'Separate company note.' } })).status, 201);
   assert.equal((await request('/api/company/saved-students', { cookie: company.cookie })).body.students.length, 1);
+  assert.equal((await request('/api/company/saved-students', { cookie: otherCompany.cookie })).body.students[0].id, secondStudentId);
 });
