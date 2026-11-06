@@ -11,7 +11,7 @@ import { hashOtp, hashPassword, newId, newOtp, newSecret, newUserId, otpMatches,
 import { InputError, validateCompanyProfile, validateRegistration } from './validation.js';
 
 // DB_DRIVER=sqlite (default) | mongo. See server/README.md and repositories/index.js.
-const { driver, auth, db } = await createRepositories();
+const { driver, auth, student, db } = await createRepositories();
 const app = express();
 const port = Number(process.env.PORT || 4000);
 const otpLifeMs = 5 * 60 * 1000;
@@ -251,7 +251,7 @@ app.post('/api/auth/change-password', requireAuth, asyncRoute(async (req, res) =
 }));
 
 if (driver === 'sqlite') {
-  app.use('/api', createPlatformRouter({ db, requireCompanyAuth: requireAuth }));
+  app.use('/api', createPlatformRouter({ db, student, requireCompanyAuth: requireAuth }));
 } else {
   // ponytail: only the company-auth group is ported to Mongo so far; student/challenge/assessment routes still need repositories.
   app.use('/api', (_req, res) => res.status(501).json({ error: 'This endpoint is not available on the MongoDB driver yet.' }));

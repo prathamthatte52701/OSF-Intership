@@ -30,6 +30,11 @@ export async function ensureIndexes(db) {
     { key: { account_id: 1 }, unique: true, name: 'students_account_uq' },
     { key: { college: 1 }, collation: NOCASE, name: 'students_college_idx' },
   ]);
+  await idx('student_skills', [
+    { key: { student_id: 1, skill: 1 }, unique: true, collation: NOCASE, name: 'student_skills_student_skill_uq' },
+    { key: { skill: 1 }, collation: NOCASE, name: 'student_skills_skill_idx' },
+  ]);
+  await idx('student_projects', [{ key: { student_id: 1, created_at: -1 }, name: 'student_projects_student_idx' }]);
   await idx('challenges', [
     { key: { company_id: 1, created_at: -1 }, name: 'challenges_company_idx' },
     { key: { status: 1, application_opens_at: 1, application_closes_at: 1 }, name: 'challenges_public_window_idx' },

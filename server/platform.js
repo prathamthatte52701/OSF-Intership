@@ -44,27 +44,21 @@ function parseCookie(req, name) {
   if (!part) return '';
   try { return decodeURIComponent(part.slice(name.length + 1)); } catch { return ''; }
 }
-function studentSessionFor(req, db) {
-  const token = parseCookie(req, studentCookie);
-  if (!token) return null;
-  return db.prepare(`SELECT ss.token_hash,ss.expires_at,su.id AS account_id,su.email,s.id AS student_id
-    FROM student_sessions ss JOIN student_users su ON su.id=ss.student_user_id
-    LEFT JOIN students s ON s.account_id=su.id WHERE ss.token_hash=?`).get(sha256(token));
-}
-function requireStudent(db) {
-  return (req, res, next) => {
-    const session = studentSessionFor(req, db);
+function requireStudent(student) {
+  return asyncRoute(async (req, res, next) => {
+    const token = parseCookie(req, studentCookie);
+    const session = token ? await student.findSession(sha256(token)) : null;
     if (!session || session.expires_at <= nowMs()) {
-      if (session) db.prepare('DELETE FROM student_sessions WHERE token_hash=?').run(session.token_hash);
+      if (session) await student.deleteSession(session.token_hash);
       res.setHeader('Set-Cookie', `${studentCookie}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
       return res.status(401).json({ error: 'Sign in to continue.' });
     }
-    if (db.prepare("SELECT 1 FROM student_users WHERE id=? AND account_status='ACTIVE'").get(session.account_id) == null) {
+    if (!await student.isAccountActive(session.account_id)) {
       return res.status(403).json({ error: 'This student account is not active.' });
     }
     req.student = session;
     next();
-  };
+  });
 }
 function parseSkills(value, { required = false } = {}) {
   if (value == null && !required) return [];
@@ -251,9 +245,9 @@ function challengeView(db, challenge) {
   };
 }
 
-export function createPlatformRouter({ db, requireCompanyAuth }) {
+export function createPlatformRouter({ db, student, requireCompanyAuth }) {
   const router = express.Router();
-  const studentAuth = requireStudent(db);
+  const studentAuth = requireStudent(student);
   const companyAuth = requireCompanyAuth;
 
   expireAssessmentAttempts(db);
@@ -267,55 +261,39 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     const timestamp = nowIso(); const sentAt = nowMs(); const otp = newOtp();
     const id = newId();
     const passwordHash = await hashPassword(password);
-    try {
-      db.transaction(() => {
-        db.prepare(`INSERT INTO student_users(id,email,password_hash,email_verified,account_status,password_created_at,updated_at,created_at)
-          VALUES (?,?,?,0,'ACTIVE',?,?,?)`).run(id, email, passwordHash, timestamp, timestamp, timestamp);
-        db.prepare(`INSERT INTO student_otp_challenges(student_user_id,otp_hash,expires_at,attempts,resend_count,resend_window_started_at,last_sent_at)
-          VALUES (?,?,?,0,0,?,?)`).run(id, hashOtp(otp).toString('hex'), sentAt + studentOtpLifeMs, sentAt, sentAt);
-      })();
-    } catch (error) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new InputError('A student account already exists for this email.', 409);
-      throw error;
-    }
+    const created = await student.createAccount({ id, email, passwordHash, timestamp, otp: { hash: hashOtp(otp).toString('hex'), expiresAt: sentAt + studentOtpLifeMs, sentAt } });
+    if (!created) throw new InputError('A student account already exists for this email.', 409);
     let emailDelivery = 'sent';
     try { await sendStudentOtpEmail({ to: email, otp }); } catch { emailDelivery = 'failed'; }
     res.status(201).json({ studentAccountId: id, email, emailVerified: false, emailDelivery });
   }));
 
-  router.post('/student/auth/verify-email', (req, res) => {
+  router.post('/student/auth/verify-email', asyncRoute(async (req, res) => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     const otp = req.body?.otp;
     if (!validEmail(email) || typeof otp !== 'string' || !/^\d{6}$/.test(otp)) throw new InputError('Enter the account email and its six-digit verification code.');
-    const record = db.prepare(`SELECT su.id,su.email_verified,o.otp_hash,o.expires_at,o.attempts FROM student_users su
-      JOIN student_otp_challenges o ON o.student_user_id=su.id WHERE su.email=? COLLATE NOCASE`).get(email);
+    const record = await student.getVerifyRecord(email);
     if (!record || record.email_verified) throw new InputError('The verification code is unavailable or the email is already verified.', 409);
     if (record.expires_at <= nowMs()) throw new InputError('This code expired. Request another code.', 410);
     if (record.attempts >= 5) throw new InputError('Too many incorrect attempts. Request a new code.', 429);
     if (!otpMatches(otp, record.otp_hash)) {
-      db.prepare('UPDATE student_otp_challenges SET attempts=attempts+1 WHERE student_user_id=? AND attempts<5').run(record.id);
+      await student.bumpOtpAttempts(record.id, 5);
       throw new InputError('That verification code is incorrect.', 400);
     }
-    db.transaction(() => {
-      db.prepare('UPDATE student_users SET email_verified=1,updated_at=? WHERE id=?').run(nowIso(), record.id);
-      db.prepare('DELETE FROM student_otp_challenges WHERE student_user_id=?').run(record.id);
-    })();
+    await student.completeVerification(record.id, nowIso());
     res.json({ verified: true, email: record.email });
-  });
+  }));
 
   router.post('/student/auth/resend-otp', studentOtpIpLimiter, asyncRoute(async (req, res) => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    const record = validEmail(email) ? db.prepare(`SELECT su.id,su.email,o.resend_count,o.resend_window_started_at,o.last_sent_at
-      FROM student_users su JOIN student_otp_challenges o ON o.student_user_id=su.id
-      WHERE su.email=? COLLATE NOCASE AND su.email_verified=0 AND su.account_status='ACTIVE'`).get(email) : null;
+    const record = validEmail(email) ? await student.getResendRecord(email) : null;
     const response = { message: 'If the account is eligible, a verification code will be sent.' };
     if (record) {
       const current = nowMs(); const reset = current - record.resend_window_started_at >= 60 * 60 * 1000;
       const count = reset ? 1 : record.resend_count + 1;
       if (current - record.last_sent_at >= 60 * 1000 && count <= 5) {
         const otp = newOtp();
-        db.prepare(`UPDATE student_otp_challenges SET otp_hash=?,expires_at=?,attempts=0,resend_count=?,resend_window_started_at=?,last_sent_at=? WHERE student_user_id=?`)
-          .run(hashOtp(otp).toString('hex'), current + studentOtpLifeMs, count, reset ? current : record.resend_window_started_at, current, record.id);
+        await student.replaceOtp(record.id, { hash: hashOtp(otp).toString('hex'), expiresAt: current + studentOtpLifeMs, count, windowStart: reset ? current : record.resend_window_started_at, sentAt: current });
         try { await sendStudentOtpEmail({ to: record.email, otp }); } catch { console.warn('Student email verification delivery failed.'); }
       }
     }
@@ -327,7 +305,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
     const wait = failedLoginLimiter.blockedFor(req, email);
     if (wait) return sendTooMany(res, wait, loginBlockedMessage);
-    const user = db.prepare('SELECT id,email,password_hash,account_status,email_verified FROM student_users WHERE email=? COLLATE NOCASE').get(email);
+    const user = await student.findLoginUser(email);
     const valid = Boolean(user && user.account_status === 'ACTIVE' && user.email_verified === 1 && password && await verifyPassword(user.password_hash, password).catch(error => {
       console.warn(`Student login: password verification threw (${error?.code || error?.name || 'Error'}).`);
       return false;
@@ -335,17 +313,17 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     if (!valid) { failedLoginLimiter.fail(req, email); throw new InputError('The email or password is incorrect.', 401); }
     failedLoginLimiter.reset(req, email);
     const token = newSecret(32); const expires = nowMs() + studentSessionLifeMs;
-    db.prepare('INSERT INTO student_sessions(token_hash,student_user_id,expires_at,created_at) VALUES (?,?,?,?)').run(sha256(token), user.id, expires, nowIso());
+    await student.createSession({ tokenHash: sha256(token), userId: user.id, expiresAt: expires, createdAt: nowIso() });
     res.setHeader('Set-Cookie', `${studentCookie}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${studentSessionLifeMs / 1000}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
     res.json({ authenticated: true, email: user.email, expiresAt: new Date(expires).toISOString() });
   }));
   router.get('/student/auth/session', studentAuth, (req, res) => res.json({ authenticated: true, email: req.student.email, profileCreated: Boolean(req.student.student_id) }));
-  router.post('/student/auth/logout', (req, res) => {
+  router.post('/student/auth/logout', asyncRoute(async (req, res) => {
     const token = parseCookie(req, studentCookie);
-    if (token) db.prepare('DELETE FROM student_sessions WHERE token_hash=?').run(sha256(token));
+    if (token) await student.deleteSession(sha256(token));
     res.setHeader('Set-Cookie', `${studentCookie}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
     res.json({ loggedOut: true });
-  });
+  }));
 
   const pwRule = 'Use at least 12 characters with uppercase, lowercase, a number and a special character.';
   router.post('/student/auth/change-password', studentAuth, asyncRoute(async (req, res) => {
@@ -354,35 +332,30 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     if (!validatePassword(newPassword)) throw new InputError(pwRule);
     const wait = failedLoginLimiter.blockedFor(req, req.student.email);
     if (wait) return sendTooMany(res, wait, loginBlockedMessage);
-    const user = db.prepare('SELECT password_hash FROM student_users WHERE id=?').get(req.student.account_id);
-    if (!await verifyPassword(user.password_hash, currentPassword).catch(() => false)) {
+    const currentHash = await student.getPasswordHash(req.student.account_id);
+    if (!await verifyPassword(currentHash, currentPassword).catch(() => false)) {
       failedLoginLimiter.fail(req, req.student.email);
       throw new InputError('Your current password is incorrect.', 400);
     }
     failedLoginLimiter.reset(req, req.student.email);
     const hash = await hashPassword(newPassword); const timestamp = nowIso();
-    db.transaction(() => {
-      db.prepare('UPDATE student_users SET password_hash=?,password_created_at=?,updated_at=? WHERE id=?').run(hash, timestamp, timestamp, req.student.account_id);
-      db.prepare('DELETE FROM student_sessions WHERE student_user_id=? AND token_hash<>?').run(req.student.account_id, req.student.token_hash);
-    })();
+    await student.changePassword(req.student.account_id, hash, timestamp, req.student.token_hash);
     res.json({ changed: true });
   }));
-  router.post('/student/auth/logout-all', studentAuth, (req, res) => {
-    db.prepare('DELETE FROM student_sessions WHERE student_user_id=?').run(req.student.account_id);
+  router.post('/student/auth/logout-all', studentAuth, asyncRoute(async (req, res) => {
+    await student.deleteAllSessions(req.student.account_id);
     res.setHeader('Set-Cookie', `${studentCookie}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
     res.json({ loggedOut: true });
-  });
+  }));
   router.post('/student/auth/forgot-password', studentForgotIpLimiter, asyncRoute(async (req, res) => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    const user = validEmail(email) ? db.prepare("SELECT id,email FROM student_users WHERE email=? COLLATE NOCASE AND email_verified=1 AND account_status='ACTIVE'").get(email) : null;
+    const user = validEmail(email) ? await student.findResetUser(email) : null;
     if (user) {
       const current = nowMs();
-      const last = db.prepare('SELECT last_sent_at FROM student_otp_challenges WHERE student_user_id=?').get(user.id);
+      const last = await student.getOtpLastSent(user.id);
       if (!last || current - last.last_sent_at >= 60 * 1000) {
         const otp = newOtp();
-        db.prepare(`INSERT INTO student_otp_challenges(student_user_id,otp_hash,expires_at,attempts,resend_count,resend_window_started_at,last_sent_at)
-          VALUES (?,?,?,0,0,?,?) ON CONFLICT(student_user_id) DO UPDATE SET otp_hash=excluded.otp_hash,expires_at=excluded.expires_at,attempts=0,last_sent_at=excluded.last_sent_at`)
-          .run(user.id, hashOtp(otp).toString('hex'), current + studentOtpLifeMs, current, current);
+        await student.upsertResetOtp(user.id, { hash: hashOtp(otp).toString('hex'), expiresAt: current + studentOtpLifeMs, now: current });
         try { await sendStudentPasswordResetEmail({ to: user.email, otp }); } catch { console.warn('Student password reset delivery failed.'); }
       }
     }
@@ -393,30 +366,24 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     const { otp, newPassword } = req.body || {};
     if (!validEmail(email) || typeof otp !== 'string' || !/^\d{6}$/.test(otp)) throw new InputError('Enter your account email and the six-digit reset code.');
     if (!validatePassword(newPassword)) throw new InputError(pwRule);
-    const record = db.prepare(`SELECT su.id,o.otp_hash,o.expires_at,o.attempts FROM student_users su
-      JOIN student_otp_challenges o ON o.student_user_id=su.id
-      WHERE su.email=? COLLATE NOCASE AND su.email_verified=1 AND su.account_status='ACTIVE'`).get(email);
+    const record = await student.getResetRecord(email);
     if (!record) throw new InputError('That reset code is invalid or has expired. Request a new one.', 400);
     if (record.expires_at <= nowMs()) throw new InputError('That reset code is invalid or has expired. Request a new one.', 410);
     if (record.attempts >= 5) throw new InputError('Too many incorrect attempts. Request a new code.', 429);
     if (!otpMatches(otp, record.otp_hash)) {
-      db.prepare('UPDATE student_otp_challenges SET attempts=attempts+1 WHERE student_user_id=? AND attempts<5').run(record.id);
+      await student.bumpOtpAttempts(record.id, 5);
       throw new InputError('That reset code is incorrect.', 400);
     }
     const hash = await hashPassword(newPassword); const timestamp = nowIso();
-    db.transaction(() => {
-      db.prepare('UPDATE student_users SET password_hash=?,password_created_at=?,updated_at=? WHERE id=?').run(hash, timestamp, timestamp, record.id);
-      db.prepare('DELETE FROM student_otp_challenges WHERE student_user_id=?').run(record.id);
-      db.prepare('DELETE FROM student_sessions WHERE student_user_id=?').run(record.id);
-    })();
+    await student.resetPassword(record.id, hash, timestamp);
     res.json({ reset: true });
   }));
 
-  router.get('/student/profile', studentAuth, (req, res) => {
-    const profile = req.student.student_id ? studentProfile(db, req.student.student_id, { privateFields: true }) : null;
+  router.get('/student/profile', studentAuth, asyncRoute(async (req, res) => {
+    const profile = req.student.student_id ? await student.buildStudentProfile(req.student.student_id, { privateFields: true }) : null;
     res.json({ profile });
-  });
-  router.put('/student/profile', studentAuth, (req, res) => {
+  }));
+  router.put('/student/profile', studentAuth, asyncRoute(async (req, res) => {
     const body = req.body || {};
     const fullName = requiredText(body.fullName, 'Full name', 150);
     const graduationYear = body.graduationYear == null || body.graduationYear === '' ? null : Number(body.graduationYear);
@@ -432,57 +399,36 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
       githubUrl: optionalUrl(body.githubUrl, 'GitHub URL'), linkedinUrl: optionalUrl(body.linkedinUrl, 'LinkedIn URL'),
       portfolioUrl: optionalUrl(body.portfolioUrl, 'Portfolio URL'), location: optionalText(body.location, 'Location', 160),
     };
-    const save = db.transaction(() => {
-      let id = req.student.student_id;
-      if (!id) {
-        id = newId();
-        db.prepare(`INSERT INTO students(id,account_id,full_name,profile_image,college,degree,graduation_year,about,resume_reference,github_url,linkedin_url,portfolio_url,location,profile_visible,created_at,updated_at)
-          VALUES (@id,@accountId,@fullName,@profileImage,@college,@degree,@graduationYear,@about,@resumeReference,@githubUrl,@linkedinUrl,@portfolioUrl,@location,COALESCE(@profileVisible,1),@timestamp,@timestamp)`)
-          .run({ ...values, id, accountId: req.student.account_id, timestamp });
-      } else {
-        db.prepare(`UPDATE students SET full_name=@fullName,profile_image=@profileImage,college=@college,degree=@degree,graduation_year=@graduationYear,
-          about=@about,resume_reference=@resumeReference,github_url=@githubUrl,linkedin_url=@linkedinUrl,portfolio_url=@portfolioUrl,location=@location,profile_visible=COALESCE(@profileVisible,profile_visible),updated_at=@timestamp WHERE id=@id`)
-          .run({ ...values, id, timestamp });
-      }
-      db.prepare('DELETE FROM student_skills WHERE student_id=?').run(id);
-      const addSkill = db.prepare('INSERT INTO student_skills(id,student_id,skill,created_at) VALUES (?,?,?,?)');
-      for (const skill of skills) addSkill.run(newId(), id, skill, timestamp);
-      return id;
-    });
-    const id = save();
-    res.json({ profile: studentProfile(db, id, { privateFields: true }) });
-  });
-  router.post('/student/projects', studentAuth, (req, res) => {
+    const id = await student.saveProfile({ studentId: req.student.student_id, accountId: req.student.account_id, newStudentId: newId(), newSkillId: newId, values, skills, timestamp });
+    res.json({ profile: await student.buildStudentProfile(id, { privateFields: true }) });
+  }));
+  router.post('/student/projects', studentAuth, asyncRoute(async (req, res) => {
     if (!req.student.student_id) throw new InputError('Create your student profile before adding projects.', 409);
     const title = requiredText(req.body?.title, 'Project title', 150);
     const description = optionalText(req.body?.description, 'Project description', 3000);
     const projectUrl = optionalUrl(req.body?.projectUrl, 'Project URL');
     const id = newId(); const timestamp = nowIso();
-    db.prepare(`INSERT INTO student_projects(id,student_id,title,description,project_url,created_at,updated_at) VALUES (?,?,?,?,?,?,?)`)
-      .run(id, req.student.student_id, title, description, projectUrl, timestamp, timestamp);
-    res.status(201).json({ project: listProjects(db, req.student.student_id).find(project => project.id === id) });
-  });
-  router.put('/student/projects/:id', studentAuth, (req, res) => {
+    res.status(201).json({ project: await student.createProject({ id, studentId: req.student.student_id, title, description, projectUrl, timestamp }) });
+  }));
+  router.put('/student/projects/:id', studentAuth, asyncRoute(async (req, res) => {
     if (!req.student.student_id) throw new InputError('Create your student profile before adding projects.', 409);
-    const project = db.prepare('SELECT id FROM student_projects WHERE id=? AND student_id=?').get(req.params.id, req.student.student_id);
-    if (!project) throw new InputError('Project not found.', 404);
+    if (!await student.projectOwned(req.params.id, req.student.student_id)) throw new InputError('Project not found.', 404);
     const title = requiredText(req.body?.title, 'Project title', 150);
-    db.prepare('UPDATE student_projects SET title=?,description=?,project_url=?,updated_at=? WHERE id=? AND student_id=?')
-      .run(title, optionalText(req.body?.description, 'Project description', 3000), optionalUrl(req.body?.projectUrl, 'Project URL'), nowIso(), project.id, req.student.student_id);
-    res.json({ project: listProjects(db, req.student.student_id).find(item => item.id === project.id) });
-  });
-  router.delete('/student/projects/:id', studentAuth, (req, res) => {
+    const project = await student.updateProject({ id: req.params.id, studentId: req.student.student_id, title,
+      description: optionalText(req.body?.description, 'Project description', 3000), projectUrl: optionalUrl(req.body?.projectUrl, 'Project URL'), timestamp: nowIso() });
+    res.json({ project });
+  }));
+  router.delete('/student/projects/:id', studentAuth, asyncRoute(async (req, res) => {
     if (!req.student.student_id) throw new InputError('Create your student profile before adding projects.', 409);
-    const result = db.prepare('DELETE FROM student_projects WHERE id=? AND student_id=?').run(req.params.id, req.student.student_id);
-    if (!result.changes) throw new InputError('Project not found.', 404);
+    if (!await student.deleteProject(req.params.id, req.student.student_id)) throw new InputError('Project not found.', 404);
     res.json({ deleted: true });
-  });
-  router.get('/students/:id', studentAuth, (req, res) => {
+  }));
+  router.get('/students/:id', studentAuth, asyncRoute(async (req, res) => {
     if (req.student.student_id !== req.params.id) throw new InputError('You may view only your own student profile.', 403);
-    const profile = studentProfile(db, req.params.id, { privateFields: true });
+    const profile = await student.buildStudentProfile(req.params.id, { privateFields: true });
     if (!profile) throw new InputError('Student profile not found.', 404);
     res.json({ profile });
-  });
+  }));
 
   // Students can see published challenges and apply only during the public window.
   router.get('/challenges', (req, res) => {

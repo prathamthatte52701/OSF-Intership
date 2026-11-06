@@ -1,15 +1,17 @@
 // Repository selector. DB_DRIVER=sqlite (default) | mongo.
 //
 // Interface (plain JS, all methods async): each repository group is an object of functions.
-// Ported groups: `auth` (company registration/OTP/setup/login/sessions/profile) in both drivers.
-// Not yet extracted: student auth+profile, challenges, applications, assessments, talent/saved
+// Ported groups: `auth` (company registration/OTP/setup/login/sessions/profile) and `student` (student auth/profile/projects +
+// shared buildStudentProfile) in both drivers.
+// Not yet extracted: challenges, applications, assessments, talent/saved
 // students - these still use `db.prepare` in platform.js (sqlite only). `db` is returned for them
 // and is null under the mongo driver.
 export async function createRepositories(driver = process.env.DB_DRIVER || 'sqlite') {
   if (driver === 'sqlite') {
     const { db } = await import('../db.js');
     const { createAuthRepo } = await import('./sqlite/auth.js');
-    return { driver, db, auth: createAuthRepo(db) };
+    const { createStudentRepo } = await import('./sqlite/student.js');
+    return { driver, db, auth: createAuthRepo(db), student: createStudentRepo(db) };
   }
   if (driver === 'mongo') {
     const { connectMongo } = await import('./mongo/connect.js');
