@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { useSlideIndicator } from '../useSlideIndicator.js';
 import CompanyProfile from '../CompanyProfile.jsx';
 import LiveChallengePage from './LiveChallengePage.jsx';
 import ChallengeFormPage from './ChallengeFormPage.jsx';
@@ -56,6 +57,8 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
   const contactName = account?.profile?.contact || 'Representative';
   const companyName = account?.profile?.company || contactName;
   const activeModule = moduleForPath(path);
+  const navRef = useRef(null);
+  useSlideIndicator(navRef, activeModule?.name, true);
   const [challengeSummary, setChallengeSummary] = React.useState(null);
 
   React.useEffect(() => {
@@ -106,7 +109,7 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
           </a>
 
           <div className="dash-nav-section-title">Workspace</div>
-          <nav className="dash-sidebar-nav">
+          <nav className="dash-sidebar-nav slide-ind" ref={navRef}>
             {MODULES.map(item => (
               <button
                 key={item.name}

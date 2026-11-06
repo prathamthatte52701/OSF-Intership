@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { companyApi } from './companyApi.js';
+import { Skeleton } from '../ui/Skeleton.jsx';
 
 const LIMITS = {
   roleTitle: 150,
@@ -69,7 +70,7 @@ function fmtFull(iso) {
 }
 
 function statusPillClass(status) {
-  return status === 'PUBLISHED' ? 'success' : 'neutral';
+  return status === 'PUBLISHED' ? 'success is-published' : 'neutral';
 }
 
 function emptyForm() {
@@ -339,9 +340,9 @@ export default function ChallengeFormPage({ go, challengeId }) {
     return (
       <div className="cp-card">
         <div className="skeleton-rows">
-          <div className="skeleton-row" />
-          <div className="skeleton-row" />
-          <div className="skeleton-row" />
+          <Skeleton />
+          <Skeleton />
+          <Skeleton />
         </div>
       </div>
     );

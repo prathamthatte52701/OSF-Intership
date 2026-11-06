@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { companyApi } from './companyApi.js';
+import { Skeleton } from '../ui/Skeleton.jsx';
+import { useSlideIndicator } from '../useSlideIndicator.js';
 
 const FILTERS = ['All', 'Draft', 'Published', 'Closed'];
 const STATUS_LABEL = { DRAFT: 'DRAFT', PUBLISHED: 'PUBLISHED', CLOSED: 'CLOSED' };
@@ -55,6 +57,8 @@ export default function LiveChallengePage({ go }) {
   const [rowErrors, setRowErrors] = useState({});
   const [confirmState, setConfirmState] = useState(null);
   const [toast, setToast] = useState('');
+  const tabsRef = useRef(null);
+  useSlideIndicator(tabsRef, `${filter}${challenges ? challenges.length : 'x'}`);
 
   function load() {
     setError('');
@@ -111,9 +115,9 @@ export default function LiveChallengePage({ go }) {
     return (
       <div className="dash-card">
         <div className="skeleton-rows">
-          <div className="skeleton-row" />
-          <div className="skeleton-row" />
-          <div className="skeleton-row" />
+          <Skeleton />
+          <Skeleton />
+          <Skeleton />
         </div>
       </div>
     );
@@ -129,7 +133,7 @@ export default function LiveChallengePage({ go }) {
 
   return (
     <div>
-      <div className="challenge-filter-tabs">
+      <div className="challenge-filter-tabs slide-ind" ref={tabsRef}>
         {FILTERS.map(name => (
           <button
             key={name}
@@ -251,7 +255,7 @@ function RowActions({ challenge, busy, go, onPublish, onClose }) {
 }
 
 function statusPillClass(status) {
-  if (status === 'PUBLISHED') return 'success';
+  if (status === 'PUBLISHED') return 'success is-published';
   if (status === 'CLOSED') return 'neutral';
   return 'neutral';
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './landing.css';
+import { useScrollReveal } from './useScrollReveal.js';
 
 const iconPaths = {
   spark: ['M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3Z', 'M19 3v4', 'M17 5h4'],
@@ -134,6 +135,9 @@ function NavMenu({ label, items, go, onDone }) {
 
 export default function LandingPage({ go }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const mainRef = useRef(null);
+  useScrollReveal(mainRef);
+  const spot = e => { const r = e.currentTarget.getBoundingClientRect(); e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`); e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`); };
   const route = path => event => {
     event.preventDefault();
     setMenuOpen(false);
@@ -168,7 +172,7 @@ export default function LandingPage({ go }) {
         </nav>
       </header>
 
-      <main>
+      <main ref={mainRef}>
         <section className="landing-hero" aria-labelledby="landing-title">
           <div className="landing-hero-content">
             <p className="landing-eyebrow landing-eyebrow-pill"><span className="landing-eyebrow-dot" /> India’s Talent. Global Opportunities.</p>
@@ -200,7 +204,7 @@ export default function LandingPage({ go }) {
           </div>
           <div className="landing-journey-grid">
             {journey.map(([number, title, text, icon]) => (
-              <article className="landing-journey-card" key={number}>
+              <article className="landing-journey-card reveal-item" key={number}>
                 <span className="landing-journey-mark"><LandingIcon name={icon} /></span>
                 <h3>{number} <span>{title}</span></h3>
                 <p>{text}</p>
@@ -221,7 +225,7 @@ export default function LandingPage({ go }) {
           </div>
           <div className="landing-ecosystem-grid">
             {ecosystem.map((item, i) => (
-              <article className={'landing-ecosystem-card landing-ecosystem-tone-' + (i + 1)} key={item.title}>
+              <article className={'landing-ecosystem-card reveal-item landing-ecosystem-tone-' + (i + 1)} key={item.title} onMouseMove={spot}>
                 <span className="landing-icon-tile"><LandingIcon name={item.icon} /></span>
                 <h3>{item.title}</h3><p>{item.text}</p>
                 <a href={item.link}>{item.action} <LandingIcon name="arrow" size={15} /></a>
@@ -302,7 +306,7 @@ export default function LandingPage({ go }) {
               <p>Through this event, students from every corner of India can take on live company challenges, prove their skills in assessments and get discovered by companies.</p>
             </div>
             <div className="landing-opportunity-grid">
-              {opportunityTypes.map((item, i) => <article className={'landing-opportunity-card landing-opportunity-' + (i + 1)} key={item.title}>
+              {opportunityTypes.map((item, i) => <article className={'landing-opportunity-card reveal-item landing-opportunity-' + (i + 1)} key={item.title}>
                 <span className="landing-icon-tile"><LandingIcon name={item.icon} /></span><h3>{item.title}</h3>
                 <ul>{item.text.map(line => <li key={line}>{line}</li>)}</ul>
               </article>)}
