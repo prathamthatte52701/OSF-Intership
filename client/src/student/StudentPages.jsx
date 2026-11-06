@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { studentApi } from './studentApi.js';
+import { Skeleton } from '../ui/Skeleton.jsx';
+import './student-overview.css';
 import { errorMessage, Field, formatDate, LoadingState, PageTitle, StateBlock, StatusPill, StudentIcon } from './StudentUI.jsx';
 
 const statusTone = status => ({ SUBMITTED: 'success', IN_PROGRESS: 'info', APPLIED: 'neutral', EXPIRED: 'warning', REVIEWED: 'success', IN_PROGRESS_ASSESSMENT: 'info' })[status] || 'neutral';
@@ -33,42 +35,60 @@ export function StudentOverviewPage({ profile, session, go }) {
   const activeTasks = applications.filter(application => ['APPLIED', 'IN_PROGRESS'].includes(application.status) && Date.parse(application.individualDeadline) > Date.now());
   const submitted = applications.filter(application => application.status === 'SUBMITTED');
   const shortlisted = applications.filter(application => isShortlisted(application.evaluation));
-  const upcoming = [...activeTasks].sort((a, b) => Date.parse(a.individualDeadline) - Date.parse(b.individualDeadline)).slice(0, 3);
+  const upcoming = applications.filter(application => ['APPLIED', 'IN_PROGRESS'].includes(application.status)).sort((a, b) => Date.parse(a.individualDeadline) - Date.parse(b.individualDeadline)).slice(0, 3);
   const profileFields = profile ? [profile.fullName, profile.college, profile.degree, profile.graduationYear, profile.about, profile.location, profile.skills?.length, profile.githubUrl, profile.linkedinUrl, profile.portfolioUrl].filter(Boolean).length : 0;
   const completion = profile ? Math.round(profileFields / 10 * 100) : 0;
 
-  return <>
-    <PageTitle eyebrow="YOUR OSF WORKSPACE" title={`Welcome${profile?.fullName ? `, ${profile.fullName.split(' ')[0]}` : ''}`} description={`Track your work and find your next opportunity${session?.email ? ` · ${session.email}` : ''}.`} action={<button className="sp-button sp-button-primary" onClick={() => go('/student/challenges')}>Explore challenges <StudentIcon name="arrow" size={16} /></button>} />
-    {loading ? <LoadingState label="Loading your student activity…" /> : error ? <StateBlock title="We couldn’t load your overview" tone="error" action={<button className="sp-button sp-button-secondary" onClick={load}>Retry</button>}>{error}</StateBlock> : <>
+  const now = Date.now();
+  const tz = new Intl.DateTimeFormat('en-IN', { timeZoneName: 'short' }).formatToParts(new Date()).find(part => part.type === 'timeZoneName')?.value || '';
+  const open = challenges.filter(challenge => !challenge.applicationClosesAt || Date.parse(challenge.applicationClosesAt) > now);
+  const inProgress = activeTasks.find(application => application.status === 'IN_PROGRESS');
+  const next = !profile || completion < 100 ? { label: 'Complete your profile', path: '/student/profile' }
+    : !applications.length ? { label: 'Explore challenges', path: '/student/challenges' }
+      : inProgress ? { label: `Continue ${inProgress.roleTitle || 'your task'}`, path: `/student/applications/${encodeURIComponent(inProgress.id)}` }
+        : { label: 'Explore challenges', path: '/student/challenges' };
+  const firstName = profile?.fullName?.split(' ')[0];
+
+  return <div className="so">
+    <section className="so-welcome"><div><h1>Welcome{firstName ? `, ${firstName}` : ''}</h1><p>{profile && completion < 100 ? `Your profile is ${completion}% complete. Finish it so companies can find you.` : applications.length ? 'Pick up where you left off.' : 'Find a real company challenge and apply.'}</p></div><button className="so-cta" onClick={() => go(next.path)}>{next.label} <StudentIcon name="arrow" size={16} /></button></section>
+    {loading ? <div className="so-skeleton"><div className="so-stats">{[0, 1, 2, 3].map(i => <Skeleton key={i} height={116} radius="14px" />)}</div><Skeleton height={160} radius="14px" /><Skeleton height={200} radius="14px" /></div> : error ? <StateBlock title="We couldn’t load your overview" tone="error" action={<button className="sp-button sp-button-secondary" onClick={load}>Retry</button>}>{error}</StateBlock> : <>
       {!profile && <StateBlock title="Complete your student profile to get started" action={<button className="sp-button sp-button-primary" onClick={() => go('/student/profile')}>Create profile <StudentIcon name="arrow" size={15} /></button>}>Add your name and skills before applying to challenges or starting an assessment.</StateBlock>}
       {profile && completion < 100 && <div className="sp-completion-card"><div className="sp-completion-copy"><div><span className="sp-eyebrow">PROFILE COMPLETION</span><strong>{completion}% complete</strong></div><p>Add a few details to help companies understand your experience.</p></div><div className="sp-progress-track"><span style={{ width: `${completion}%` }} /></div><button className="sp-button sp-button-secondary" onClick={() => go('/student/profile')}>Continue your profile</button></div>}
-      <div className="sp-stat-grid">
-        <StatCard label="Applications" value={applications.length} icon="briefcase" onClick={() => go('/student/applications')} />
-        <StatCard label="Active tasks" value={activeTasks.length} icon="clock" onClick={() => go('/student/applications')} accent="blue" />
-        <StatCard label="Submitted" value={submitted.length} icon="file" onClick={() => go('/student/applications')} accent="green" />
-        <StatCard label="Shortlisted" value={shortlisted.length} icon="medal" onClick={() => go('/student/applications')} accent="gold" />
+      <div className="so-stats">
+        <StatCard label="Applications" value={applications.length} icon="briefcase" help={applications.length ? 'Challenges you applied to' : 'Apply to your first challenge'} onClick={() => go('/student/applications')} />
+        <StatCard label="Active tasks" value={activeTasks.length} icon="clock" help={activeTasks.length ? 'Open and before deadline' : 'Nothing due right now'} onClick={() => go('/student/applications')} accent="blue" />
+        <StatCard label="Submitted" value={submitted.length} icon="file" help={submitted.length ? 'Waiting for company review' : '0 submitted — submit your first task'} onClick={() => go('/student/applications')} accent="green" />
+        <StatCard label="Shortlisted" value={shortlisted.length} icon="medal" help={shortlisted.length ? 'Companies want to talk to you' : 'Appears after company review'} onClick={() => go('/student/applications')} accent="gold" />
       </div>
-      <div className="sp-overview-grid">
-        <section className="sp-panel"><div className="sp-panel-heading"><div><span className="sp-eyebrow">KEEP MOVING</span><h2>Upcoming deadlines</h2></div><button className="sp-link-button" onClick={() => go('/student/applications')}>All applications <StudentIcon name="arrow" size={15} /></button></div>
-          {upcoming.length ? <div className="sp-deadline-list">{upcoming.map(application => <button className="sp-deadline-row" key={application.id} onClick={() => go(`/student/applications/${encodeURIComponent(application.id)}`)}><span className="sp-deadline-icon"><StudentIcon name="clock" /></span><span className="sp-deadline-main"><strong>{application.roleTitle || 'Challenge task'}</strong><small>{formatDate(application.individualDeadline)} · {prettyStatus(application.status)}</small></span><StudentIcon name="arrow" size={16} /></button>)}</div> : <StateBlock title="No upcoming task deadlines" action={<button className="sp-link-button" onClick={() => go('/student/challenges')}>Find a challenge <StudentIcon name="arrow" size={15} /></button>}>Applications and individual deadlines will appear here when you apply.</StateBlock>}
+      <div className="so-grid">
+        <section className="sp-panel so-card"><div className="sp-panel-heading"><div><span className="sp-eyebrow">KEEP MOVING</span><h2>Upcoming deadlines</h2></div><button className="sp-link-button" onClick={() => go('/student/applications')}>All applications <StudentIcon name="arrow" size={15} /></button></div>
+          {upcoming.length ? <div className="sp-deadline-list">{upcoming.map(application => <button className="sp-deadline-row" key={application.id} onClick={() => go(`/student/applications/${encodeURIComponent(application.id)}`)}><span className="sp-deadline-icon"><StudentIcon name="clock" /></span><span className="sp-deadline-main"><strong>{application.roleTitle || 'Challenge task'}</strong><small>{formatDate(application.individualDeadline)} {tz} · {deadlineLabel(application.individualDeadline)}</small></span><StudentIcon name="arrow" size={16} /></button>)}</div> : <StateBlock title="No upcoming task deadlines" action={<button className="sp-link-button" onClick={() => go('/student/challenges')}>Find a challenge <StudentIcon name="arrow" size={15} /></button>}>Applications and individual deadlines will appear here when you apply.</StateBlock>}
         </section>
         <section className="sp-panel sp-profile-summary"><div className="sp-panel-heading"><div><span className="sp-eyebrow">YOUR PROFILE</span><h2>{profile?.fullName || 'Your profile'}</h2></div><button className="sp-icon-button" aria-label="Edit profile" onClick={() => go('/student/profile')}><StudentIcon name="user" /></button></div>
           {profile ? <><p>{profile.about || 'Add a short introduction so companies can learn about your interests and experience.'}</p><div className="sp-chip-list">{profile.skills?.length ? profile.skills.slice(0, 5).map(skill => <span className="sp-chip" key={skill}>{skill}</span>) : <span className="sp-muted">No skills added yet</span>}</div><button className="sp-link-button" onClick={() => go('/student/profile')}>Manage profile <StudentIcon name="arrow" size={15} /></button></> : <><p>Save your skills, projects and professional links in one place.</p><button className="sp-button sp-button-secondary" onClick={() => go('/student/profile')}>Set up your profile</button></>}
         </section>
       </div>
-      <section className="sp-panel sp-recommendations"><div className="sp-panel-heading"><div><span className="sp-eyebrow">PUBLISHED BY COMPANIES</span><h2>{profile?.skills?.length ? 'Challenges matching your skills' : 'Recently available challenges'}</h2></div><button className="sp-link-button" onClick={() => go('/student/challenges')}>Browse all <StudentIcon name="arrow" size={15} /></button></div>
-        {challenges.length ? <div className="sp-mini-challenge-grid">{challenges.slice(0, 3).map(challenge => <ChallengeCard key={challenge.id} challenge={challenge} onOpen={() => go(`/student/challenges/${encodeURIComponent(challenge.id)}`)} compact />)}</div> : <StateBlock title="No published challenges to show yet" action={<button className="sp-link-button" onClick={() => go('/student/challenges')}>Check again <StudentIcon name="arrow" size={15} /></button>}>New opportunities will appear here when companies publish them.</StateBlock>}
+      <section className="sp-panel so-card sp-recommendations"><div className="sp-panel-heading"><div><span className="sp-eyebrow">PUBLISHED BY COMPANIES</span><h2>{profile?.skills?.length ? 'Challenges matching your skills' : 'Recently available challenges'}</h2></div><button className="sp-link-button" onClick={() => go('/student/challenges')}>Browse all <StudentIcon name="arrow" size={15} /></button></div>
+        {open.length ? <div className="sp-mini-challenge-grid">{open.slice(0, 3).map(challenge => <ChallengeCard key={challenge.id} challenge={challenge} onOpen={() => go(`/student/challenges/${encodeURIComponent(challenge.id)}`)} compact />)}</div> : <StateBlock title="No published challenges to show yet" action={<button className="sp-link-button" onClick={() => go('/student/challenges')}>Check again <StudentIcon name="arrow" size={15} /></button>}>New opportunities will appear here when companies publish them.</StateBlock>}
       </section>
     </>}
-  </>;
+  </div>;
 }
 
-function StatCard({ label, value, icon, onClick, accent = 'navy' }) {
-  return <button className={`sp-stat-card sp-stat-${accent}`} onClick={onClick}><span className="sp-stat-icon"><StudentIcon name={icon} size={18} /></span><span className="sp-stat-value">{value}</span><span className="sp-stat-label">{label}</span></button>;
+function StatCard({ label, value, icon, help, onClick, accent = 'navy' }) {
+  return <button className={`sp-stat-card so-stat sp-stat-${accent}`} onClick={onClick}><span className="sp-stat-icon"><StudentIcon name={icon} size={18} /></span><span className="sp-stat-value">{value}</span><span className="sp-stat-label">{label}</span><span className="so-stat-help">{help}</span></button>;
+}
+
+function deadlineLabel(value) {
+  const ms = Date.parse(value) - Date.now();
+  if (Number.isNaN(ms)) return 'No deadline';
+  if (ms <= 0) return 'Expired';
+  const days = Math.ceil(ms / 86400000);
+  return `${days} day${days === 1 ? '' : 's'} left`;
 }
 
 function ChallengeCard({ challenge, onOpen, compact = false }) {
-  return <article className={`sp-challenge-card ${compact ? 'is-compact' : ''}`}><div className="sp-challenge-company"><span className="sp-company-mark">{(challenge.companyName || 'C').charAt(0).toUpperCase()}</span><span>{challenge.companyName || 'Company information unavailable'}</span><StatusPill tone={challenge.isPaid ? 'success' : 'neutral'}>{challenge.isPaid ? 'Paid' : 'Unpaid'}</StatusPill></div><h3>{challenge.roleTitle}</h3><p className="sp-challenge-description">{challenge.taskDescription}</p><div className="sp-chip-list">{(challenge.requiredSkills || []).slice(0, 5).map(skill => <span className="sp-chip" key={skill}>{skill}</span>)}</div><div className="sp-challenge-meta"><span><StudentIcon name="clock" size={15} /> Closes {formatDate(challenge.applicationClosesAt)}</span><span>{challenge.individualTaskDurationDays} day task</span></div>{challenge.compensationDetails && <p className="sp-compensation">{challenge.compensationDetails}</p>}<button className="sp-button sp-button-secondary sp-card-action" onClick={onOpen}>View challenge <StudentIcon name="arrow" size={15} /></button></article>;
+  return <article className={`sp-challenge-card ${compact ? 'is-compact' : ''}`}><div className="sp-challenge-company"><span className="sp-company-mark">{(challenge.companyName || 'C').charAt(0).toUpperCase()}</span><span>{challenge.companyName || 'Company information unavailable'}</span><StatusPill tone={challenge.isPaid ? 'success' : 'neutral'}>{challenge.isPaid ? 'Paid' : 'Unpaid'}</StatusPill></div><h3>{challenge.roleTitle}</h3><p className="sp-challenge-description">{challenge.taskDescription?.trim() || 'No description provided'}</p><div className="sp-chip-list">{(challenge.requiredSkills || []).slice(0, 5).map(skill => <span className="sp-chip" key={skill}>{skill}</span>)}</div><div className="sp-challenge-meta"><span><StudentIcon name="clock" size={15} /> Closes {formatDate(challenge.applicationClosesAt)}</span><span>{challenge.individualTaskDurationDays} day task</span></div>{challenge.compensationDetails && <p className="sp-compensation">{challenge.compensationDetails}</p>}<button className="sp-button sp-button-secondary sp-card-action" onClick={onOpen}>View challenge <StudentIcon name="arrow" size={15} /></button></article>;
 }
 
 export function StudentProfilePage({ profile, profileLoading, onSaved, onRefresh, notify }) {
@@ -272,7 +292,7 @@ export function MyApplicationsPage({ go }) {
 }
 
 function ApplicationCard({ application, companyName, onOpen }) {
-  return <button className="sp-application-card" onClick={onOpen}><span className="sp-application-mark"><StudentIcon name="briefcase" /></span><span className="sp-application-main"><strong>{application.roleTitle || 'Challenge application'}</strong><small>{companyName || 'Company details are no longer publicly available'}</small><span className="sp-application-dates">Applied {formatDate(application.appliedAt)} · Deadline {formatDate(application.individualDeadline)}</span></span><span className="sp-application-badges"><StatusPill tone={statusTone(application.status)}>{prettyStatus(application.status)}</StatusPill>{application.submission && <StatusPill tone="success">Submitted</StatusPill>}{isShortlisted(application.evaluation) && <StatusPill tone="gold">Shortlisted</StatusPill>}</span><StudentIcon name="arrow" size={17} /></button>;
+  return <button className="sp-application-card" onClick={onOpen}><span className="sp-application-mark"><StudentIcon name="briefcase" /></span><span className="sp-application-main"><strong>{application.roleTitle || 'Challenge application'}</strong><small>{companyName || 'Company details are no longer publicly available'}</small><span className="sp-application-dates">Applied {formatDate(application.appliedAt)} · Deadline {formatDate(application.individualDeadline)}</span></span><span className="sp-application-badges"><StatusPill tone={statusTone(application.status)}>{prettyStatus(application.status)}</StatusPill>{application.submission?.submittedAt && <StatusPill tone="success">Submitted</StatusPill>}{isShortlisted(application.evaluation) && <StatusPill tone="gold">Shortlisted</StatusPill>}</span><StudentIcon name="arrow" size={17} /></button>;
 }
 
 export function ApplicationDetailsPage({ applicationId, go, notify }) {

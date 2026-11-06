@@ -1,0 +1,42 @@
+/* Student Overview redesign. Light theme, tokens from styles.css only. */
+.so { display: flex; flex-direction: column; gap: 24px; }
+
+.so-welcome { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 32px; color: #fff; background: var(--osf-navy); border-radius: 14px; border: 1px solid var(--osf-navy-deep); box-shadow: var(--shadow-md), var(--shadow-xs); }
+.so-welcome h1 { margin: 0 0 4px; font-family: var(--font-heading); font-size: 28px; font-weight: 600; line-height: 1.2; color: #fff; }
+.so-welcome p { margin: 0; font-size: 15px; color: rgba(255, 255, 255, 0.78); }
+.so-cta { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 24px; font: inherit; font-size: 15px; font-weight: 600; color: var(--osf-navy); background: #fff; border: 1px solid #fff; border-radius: var(--radius-md); cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease; }
+.so-cta:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.so-cta:active { transform: translateY(0); }
+.so-cta:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.so-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.so-stat { display: grid; grid-template-columns: 36px 1fr; grid-template-rows: auto auto auto; row-gap: 4px; align-items: center; min-height: 116px; padding: 16px; border-radius: 14px; box-shadow: var(--shadow-xs), var(--shadow-sm); cursor: pointer; transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease; }
+.so-stat .sp-stat-icon { grid-row: 1 / span 2; }
+.so-stat .sp-stat-value { grid-column: 2; align-self: end; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.so-stat .sp-stat-label { grid-column: 2; font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+.so-stat-help { grid-column: 1 / -1; font-size: 13px; color: var(--text-secondary); }
+.so-stat:focus-visible { outline: 2px solid var(--border-color-focus); outline-offset: 2px; }
+
+.so-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 24px; }
+.so-card { border-radius: 14px; box-shadow: var(--shadow-xs), var(--shadow-sm); transition: transform 150ms ease, box-shadow 150ms ease; }
+.so .sp-chip { font-size: 12px; }
+.so .sp-challenge-card { border-radius: 14px; transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease; }
+.so .sp-challenge-description { font-size: 15px; }
+.so .sp-challenge-meta { font-size: 13px; }
+.so-skeleton { display: flex; flex-direction: column; gap: 24px; }
+
+@media (hover: hover) {
+  .so-cta:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .so-stat:hover, .so-card:hover, .so .sp-challenge-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+}
+
+@media (max-width: 900px) {
+  .so-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .so-grid { grid-template-columns: minmax(0, 1fr); }
+  .so-welcome { flex-direction: column; align-items: flex-start; padding: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .so-cta, .so-stat, .so-card, .so .sp-challenge-card { transition: none; }
+  .so-cta:hover, .so-stat:hover, .so-card:hover, .so .sp-challenge-card:hover { transform: none; }
+}
