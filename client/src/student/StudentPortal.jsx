@@ -6,6 +6,7 @@ import {
   AssessmentPage, MyApplicationsPage, StudentOverviewPage, StudentProfilePage, StudentSettingsPage,
 } from './StudentPages.jsx';
 import './student.css';
+import './student-auth.css';
 
 const menu = [
   { label: 'Overview', path: '/student/dashboard', icon: 'dashboard' },
@@ -187,7 +188,24 @@ function AuthPage({ path, go, onLogin, notify, pendingEmail, setPendingEmail }) 
   }
 
   return (
-    <div className="student-auth-wrap">
+    <div className="student-auth-wrap student-auth-split">
+      <aside className="sa-brand">
+        <img className="sa-brand-logo" src="/landing/osf-brand.png" alt="Our Startup Freelancer" />
+        <div className="sa-brand-body">
+          <h2>Turn your skills into real startup experience</h2>
+          <ul className="sa-benefits">
+            <li>Build your profile</li>
+            <li>Apply to real company challenges</li>
+            <li>Get rated and shortlisted</li>
+          </ul>
+        </div>
+        <div className="sa-preview" aria-hidden="true">
+          <div className="sa-preview-head"><span className="sa-preview-dot" /><span className="sa-preview-line sa-w60" /></div>
+          <div className="sa-preview-line sa-w90" /><div className="sa-preview-line sa-w40" />
+          <div className="sa-preview-row"><span className="sa-preview-chip" /><span className="sa-preview-chip" /><span className="sa-preview-badge" /></div>
+        </div>
+      </aside>
+      <main className="sa-main">
       <a className="student-auth-home" href="/" onClick={event => { event.preventDefault(); go('/'); }}>← OSF home</a>
       <div className="student-auth-card">
         <img className="student-auth-logo" src="/landing/osf-brand.png" alt="Our Startup Freelancer" />
@@ -197,17 +215,26 @@ function AuthPage({ path, go, onLogin, notify, pendingEmail, setPendingEmail }) 
         <form onSubmit={submit} className="student-auth-form">
           <label className="sp-field"><span>Email address</span><input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required maxLength={254} disabled={isVerify && Boolean(new URLSearchParams(location.search).get('email'))} /></label>
           {isVerify ? <label className="sp-field"><span>Verification code</span><input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={otp} onChange={event => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} required aria-describedby="student-otp-help" /><small id="student-otp-help">The code expires after five minutes.</small></label>
-            : <label className="sp-field"><span>Password</span><input type="password" autoComplete={isRegister ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.target.value)} required minLength={isRegister ? 12 : undefined} maxLength={128} />{isRegister && <small>At least 12 characters, including uppercase, lowercase, number and special character.</small>}</label>}
+            : <label className="sp-field"><span>Password</span><input type="password" autoComplete={isRegister ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.target.value)} required minLength={isRegister ? 12 : undefined} maxLength={128} />{isRegister && <small>At least 12 characters, including uppercase, lowercase, number and special character.</small>}{isRegister && <StrengthMeter password={password} />}</label>}
           {isRegister && <label className="sp-field"><span>Confirm password</span><input type="password" autoComplete="new-password" value={confirmation} onChange={event => setConfirmation(event.target.value)} required minLength={12} maxLength={128} /></label>}
           {error && <div className="student-alert student-alert-error" role="alert">{error}</div>}
           {message && <div className="student-alert student-alert-success" role="status">{message}</div>}
-          <button className="sp-button sp-button-primary sp-button-wide" type="submit" disabled={busy}>{busy ? 'Please wait…' : isRegister ? 'Create student account' : isVerify ? 'Verify email' : 'Sign in'}</button>
+          <button className="sp-button sp-button-primary sp-button-wide" type="submit" disabled={busy}>{busy ? <><span className="sa-spinner" aria-hidden="true" />Please wait…</> : isRegister ? 'Create student account' : isVerify ? 'Verify email' : 'Sign in'}</button>
         </form>
+        {!isRegister && !isVerify && <a className="sa-forgot" href="/student/forgot-password" onClick={event => { event.preventDefault(); go('/student/forgot-password'); }}>Forgot password?</a>}
         {isVerify && <button className="student-text-button student-resend" onClick={resend} disabled={busy || cooldown > 0}>{cooldown ? `Resend code in ${cooldown}s` : 'Resend verification code'}</button>}
         <div className="student-auth-switch">{isRegister ? <>Already have an account? <button onClick={() => go('/student/login')}>Sign in</button></> : isVerify ? <>Wrong email? <button onClick={() => go('/student/register')}>Start again</button></> : <>New to OSF? <button onClick={() => go('/student/register')}>Create a student account</button></>}</div>
         <a className="student-company-link" href="/login" onClick={event => { event.preventDefault(); go('/login'); }}>Looking for the company portal? Sign in here</a>
       </div>
       <p className="student-auth-legal">Your account is secured with an OSF session cookie. We never store your session token in browser storage.</p>
+      </main>
     </div>
   );
+}
+
+// Visual only: mirrors the five rules enforced in submit() above.
+function StrengthMeter({ password }) {
+  const met = [password.length >= 12, /[A-Z]/.test(password), /[a-z]/.test(password), /\d/.test(password), /[^A-Za-z0-9]/.test(password)].filter(Boolean).length;
+  const label = !password ? '' : met < 3 ? 'Weak' : met < 5 ? 'Almost there' : 'Meets all requirements';
+  return <span className="sa-meter" data-level={password ? met : 0} role="status" aria-live="polite"><span className="sa-meter-bar" aria-hidden="true"><i /><i /><i /><i /><i /></span><span className="sa-meter-label">{label}</span></span>;
 }

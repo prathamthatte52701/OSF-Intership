@@ -1,0 +1,64 @@
+/* Student auth pages: split layout, strength meter, focus glow, spinner. Light theme only. */
+.student-auth-split { min-height: 100vh; padding: 0; display: grid; grid-template-columns: minmax(340px, 5fr) 6fr; align-items: stretch; justify-content: stretch; background: var(--bg-page); }
+.sa-main { padding: 48px 24px 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; }
+.student-auth-split .student-auth-home, .student-auth-split .student-auth-card { width: min(100%, 460px); }
+.student-auth-split .student-auth-home { margin-bottom: 12px; font-size: 13px; }
+.student-auth-split .student-auth-card { padding: 32px; border-radius: 14px; box-shadow: var(--shadow-md); }
+.student-auth-split .student-auth-logo, .student-auth-split .sp-eyebrow { display: none; }
+.student-auth-split .student-auth-card h1 { margin: 0 0 8px; font-size: 28px; font-weight: 600; letter-spacing: -.02em; }
+.student-auth-split .student-auth-subtitle { margin: 0 0 24px; font-size: 15px; }
+.student-auth-split .student-auth-form { gap: 16px; }
+.student-auth-split .sp-field { gap: 8px; font-size: 13px; font-weight: 500; }
+.student-auth-split .sp-field > span { font-size: 13px; font-weight: 500; }
+.student-auth-split .sp-field > input { min-height: 44px; padding: 12px; font-size: 15px; border-radius: 8px; transition: border-color .15s ease, box-shadow .15s ease; }
+.student-auth-split .sp-field > input:focus { border-color: var(--osf-blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--osf-blue) 30%, transparent); }
+.student-auth-split .sp-field > input:disabled { background: var(--bg-surface-sunken); cursor: not-allowed; }
+.student-auth-split .sp-field small { font-size: 13px; }
+.student-auth-split .sp-button-wide { min-height: 44px; font-size: 15px; font-weight: 600; }
+.student-auth-split .student-auth-switch, .student-auth-split .student-company-link { font-size: 13px; }
+.student-auth-split .student-auth-switch { margin-top: 24px; }
+.student-auth-split .student-company-link { margin-top: 24px; padding-top: 16px; }
+.student-auth-split .student-auth-legal { margin-top: 16px; font-size: 12px; }
+.student-auth-split .student-text-button, .sa-forgot { font-size: 13px; }
+.sa-forgot { display: block; margin-top: 16px; color: var(--osf-blue-support); font-weight: 500; text-align: center; text-decoration: none; }
+.sa-forgot:focus-visible { outline: 3px solid color-mix(in srgb, var(--osf-blue) 30%, transparent); outline-offset: 3px; border-radius: 4px; }
+
+/* Brand panel */
+.sa-brand { padding: 48px; display: flex; flex-direction: column; justify-content: space-between; gap: 32px; color: #fff; background: linear-gradient(165deg, var(--osf-navy-deep) 0%, var(--osf-navy) 100%); }
+.sa-brand-logo { width: 165px; height: 44px; padding: 4px 12px; box-sizing: content-box; object-fit: contain; background: #fff; border-radius: 8px; align-self: flex-start; }
+.sa-brand h2 { margin: 0 0 24px; max-width: 420px; font-family: var(--font-heading); font-size: 28px; font-weight: 600; line-height: 1.25; letter-spacing: -.02em; }
+.sa-benefits { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; font-size: 15px; }
+.sa-benefits li { display: flex; align-items: center; gap: 12px; }
+.sa-benefits li::before { content: ''; width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--osf-blue-light); }
+.sa-preview { width: min(100%, 320px); padding: 16px; display: grid; gap: 8px; background: var(--bg-surface); border-radius: 14px; box-shadow: var(--shadow-lg); }
+.sa-preview-head { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.sa-preview-dot { width: 32px; height: 32px; border-radius: 50%; background: var(--osf-blue-light); }
+.sa-preview-line { height: 8px; border-radius: 8px; background: var(--bg-surface-sunken); }
+.sa-w90 { width: 90%; } .sa-w60 { width: 60%; } .sa-w40 { width: 40%; }
+.sa-preview-row { display: flex; gap: 8px; margin-top: 4px; }
+.sa-preview-chip { width: 48px; height: 24px; border-radius: 999px; background: var(--osf-blue-light); }
+.sa-preview-badge { width: 40px; height: 24px; margin-left: auto; border-radius: 999px; background: var(--osf-blue); }
+
+/* Password strength meter */
+.sa-meter { display: grid; gap: 4px; }
+.sa-meter-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.sa-meter-bar i { height: 4px; border-radius: 4px; background: var(--border-color); transition: background-color .2s ease; }
+.sa-meter[data-level="1"] i:nth-child(-n+1), .sa-meter[data-level="2"] i:nth-child(-n+2) { background: var(--color-danger); }
+.sa-meter[data-level="3"] i:nth-child(-n+3), .sa-meter[data-level="4"] i:nth-child(-n+4) { background: var(--osf-blue-support); }
+.sa-meter[data-level="5"] i { background: var(--osf-blue); }
+.sa-meter-label { min-height: 18px; color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+
+/* Spinner */
+.sa-spinner { width: 14px; height: 14px; margin-right: 8px; display: inline-block; vertical-align: -2px; border: 2px solid rgba(255, 255, 255, .4); border-top-color: #fff; border-radius: 50%; animation: sa-spin .8s linear infinite; }
+@keyframes sa-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sa-spinner { animation: none; } .sa-meter-bar i, .student-auth-split .sp-field > input { transition: none; } }
+@media (hover: hover) { .sa-forgot:hover { text-decoration: underline; } }
+
+/* Mobile: brand panel collapses to a header strip */
+@media (max-width: 860px) {
+  .student-auth-split { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .sa-brand { padding: 16px 24px; flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+  .sa-brand-body, .sa-preview { display: none; }
+  .sa-main { padding: 24px 16px; justify-content: flex-start; }
+  .student-auth-split .student-auth-card { padding: 24px 16px; }
+}
