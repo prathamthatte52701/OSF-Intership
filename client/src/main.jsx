@@ -716,8 +716,20 @@ function App() {
       )}
 
       {/* Main Panel */}
+      {isDashboard ? (session && (
+      <CompanyPortal
+        path={page}
+        account={account}
+        go={go}
+        logout={logout}
+        onProfileUpdated={company =>
+          setAccount(current => ({ ...current, profile: toUiProfile(company) }))
+        }
+        date={fmtDate}
+      />
+      )) : (
       <main className="main-panel">
-        {!isDashboard && (
+        {(
           <header className="topbar">
             <a
               className="mobile-logo"
@@ -1520,30 +1532,17 @@ function App() {
           {page === '/contact' && (
             <ContactUs onBack={session ? () => go('/dashboard') : () => go('/register')} />
           )}
-
-          {/* DASHBOARD EXPERIENCE */}
-          {page.startsWith('/dashboard') && session && (
-            <CompanyPortal
-              path={page}
-              account={account}
-              go={go}
-              logout={logout}
-              onProfileUpdated={company =>
-                setAccount(current => ({ ...current, profile: toUiProfile(company) }))
-              }
-              date={fmtDate}
-            />
-          )}
         </div>
 
         {/* Global Footer (Non-dashboard pages) */}
-        {!isDashboard && (
+        {(
           <footer className="main-footer">
             <span>© {new Date().getFullYear()} Our Startup Freelancer (OSF). All rights reserved.</span>
             <span className="footer-muted">India Enterprise Registration Desk</span>
           </footer>
         )}
       </main>
+      )}
 
       {/* Floating Toast Notification */}
       {notice && (

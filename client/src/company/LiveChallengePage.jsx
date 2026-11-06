@@ -129,10 +129,6 @@ export default function LiveChallengePage({ go }) {
 
   return (
     <div>
-      <div className="cp-toolbar">
-        <button className="btn btn-primary btn-sm" onClick={() => go('/dashboard/challenges/new')}>New challenge</button>
-      </div>
-
       <div className="challenge-filter-tabs">
         {FILTERS.map(name => (
           <button
