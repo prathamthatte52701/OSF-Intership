@@ -432,7 +432,7 @@ html:has(.landing-page) { scroll-behavior: smooth; }
 .landing-final .landing-button-outline-light:hover { color: var(--landing-ink) !important; background: #e4ad37; }
 
 .landing-footer { margin: 0 max(20px, calc((100vw - 1340px) / 2)) 18px; padding: 32px 36px 20px; display: grid; grid-template-columns: minmax(240px, 1.35fr) repeat(2, minmax(130px, .8fr)) minmax(210px, 1fr); column-gap: clamp(22px, 3.2vw, 48px); row-gap: 28px; color: #e9eef7; background: linear-gradient(110deg, #0c1a35, #10254a); border: 1px solid #1e385f; border-radius: 21px; }
-.landing-footer-brand .landing-brand img { width: 146px; }
+.landing-footer-brand .landing-brand img { width: 146px; height: 47px; object-fit: contain; object-position: left center; }
 .landing-footer-brand > p { max-width: 295px; margin: 15px 0 12px; color: #c1ccdc; font-size: 14px; line-height: 1.5; }
 .landing-footer-brand > small { color: #f3c158; font-size: 11px; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; }
 .landing-footer-column { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
