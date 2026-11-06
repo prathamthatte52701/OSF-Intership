@@ -22,4 +22,8 @@ export const companyApi = {
   updateChallenge: (id, body) => put(`/company/challenges/${encodeURIComponent(id)}`, body),
   publishChallenge: id => post(`/company/challenges/${encodeURIComponent(id)}/publish`),
   closeChallenge: id => post(`/company/challenges/${encodeURIComponent(id)}/close`),
+  talent: query => request(`/company/talent?${query}`),
+  savedStudents: () => request('/company/saved-students'),
+  saveStudent: (id, note) => post(`/company/saved-students/${encodeURIComponent(id)}`, { note: note || null }),
+  unsaveStudent: id => request(`/company/saved-students/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 };

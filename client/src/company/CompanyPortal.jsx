@@ -1,6 +1,7 @@
 import React from 'react';
 import CompanyProfile from '../CompanyProfile.jsx';
 import LiveChallengePage from './LiveChallengePage.jsx';
+import TalentDiscoveryPage from './TalentDiscoveryPage.jsx';
 import ChallengeFormPage from './ChallengeFormPage.jsx';
 import { companyApi } from './companyApi.js';
 import './company.css';
@@ -88,8 +89,9 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
           : `${companyName} · the roles you publish for student applicants`;
       case 'Company Profile':
         return 'Keep your enterprise details current so students see an accurate listing.';
-      case 'Skill Verification':
       case 'Talent Discovery':
+        return 'Find students by skill and college, save the ones worth a conversation.';
+      case 'Skill Verification':
         return 'Coming in the next step of the company portal.';
       default:
         return undefined;
@@ -189,7 +191,7 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
           )}
 
           {path === '/dashboard/skills' && <EmptyModule title="Skill Verification" />}
-          {path === '/dashboard/talent' && <EmptyModule title="Talent Discovery" />}
+          {path === '/dashboard/talent' && <TalentDiscoveryPage go={go} />}
 
           {path === '/dashboard/company' && (
             <CompanyProfile profile={account?.profile} onSaved={onProfileUpdated} />
