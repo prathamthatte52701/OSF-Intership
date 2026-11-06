@@ -4,12 +4,14 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { failedLoginLimiter, generalLimiter, loginBlockedMessage, sendTooMany } from './rateLimits.js';
 import { randomBytes } from 'node:crypto';
-import { db } from './db.js';
+import { createRepositories } from './repositories/index.js';
 import { createPlatformRouter, expireAssessmentAttempts } from './platform.js';
 import { sendOtpEmail, sendPasswordChangedEmail, sendSetupEmail } from './mail.js';
 import { hashOtp, hashPassword, newId, newOtp, newSecret, newUserId, otpMatches, sha256, validatePassword, verifyPassword, cookieValue } from './security.js';
 import { InputError, validateCompanyProfile, validateRegistration } from './validation.js';
 
+// DB_DRIVER=sqlite (default) | mongo. See server/README.md and repositories/index.js.
+const { driver, auth, db } = await createRepositories();
 const app = express();
 const port = Number(process.env.PORT || 4000);
 const otpLifeMs = 5 * 60 * 1000;
@@ -57,18 +59,16 @@ function readCookie(req, name) {
   return cookieValue(req, name);
 }
 
-function sessionFor(req) {
+async function sessionFor(req) {
   const token = readCookie(req, cookieName);
   if (!token) return null;
-  return db.prepare(`SELECT s.token_hash, s.expires_at, u.id AS account_id, u.user_id, c.id AS company_id, c.email
-    FROM sessions s JOIN users u ON u.id=s.user_id JOIN companies c ON c.id=u.company_id
-    WHERE s.token_hash=?`).get(sha256(token));
+  return auth.findSession(sha256(token));
 }
 
-function requireAuth(req, res, next) {
-  const session = sessionFor(req);
+async function requireAuth(req, res, next) {
+  const session = await sessionFor(req);
   if (!session || session.expires_at <= now()) {
-    if (session) db.prepare('DELETE FROM sessions WHERE token_hash=?').run(session.token_hash);
+    if (session) await auth.deleteSession(session.token_hash);
     res.setHeader('Set-Cookie', `${cookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
     return res.status(401).json({ error: 'Sign in to continue.' });
   }
@@ -78,33 +78,26 @@ function requireAuth(req, res, next) {
 
 function setupUrl(token) { return `${config.appOrigin}/set-password?token=${encodeURIComponent(token)}`; }
 
-function prepareSetupEmail(companyId, { enforceLimits = true } = {}) {
+async function prepareSetupEmail(companyId, { enforceLimits = true } = {}) {
   const token = newSecret(32);
   const current = now();
-  const prepare = db.transaction(() => {
-    const record = db.prepare(`SELECT c.email,c.contact_name,c.company_name,u.id,u.user_id,u.setup_resend_count,u.setup_resend_window_started_at,u.setup_last_sent_at
-      FROM companies c JOIN users u ON u.company_id=c.id
-      WHERE c.id=? AND c.status='VERIFIED' AND u.email_verified=1 AND u.password_setup_status='PENDING'
-      AND u.must_change_password=1 AND u.password_hash IS NULL`).get(companyId);
-    if (!record) return null;
-    if (enforceLimits) {
-      if (current - record.setup_last_sent_at < resendCooldownMs) return { limited: true };
-      const resetWindow = current - record.setup_resend_window_started_at >= resendWindowMs;
-      const count = resetWindow ? 0 : record.setup_resend_count;
-      if (count >= maxResends) return { limited: true };
-      db.prepare(`UPDATE users SET setup_token_hash=?,setup_expires_at=?,setup_resend_count=?,setup_resend_window_started_at=?,setup_last_sent_at=? WHERE id=?`)
-        .run(sha256(token), current + setupLifeMs, count + 1, resetWindow ? current : record.setup_resend_window_started_at, current, record.id);
-    } else {
-      db.prepare(`UPDATE users SET setup_token_hash=?,setup_expires_at=?,setup_last_sent_at=? WHERE id=?`)
-        .run(sha256(token), current + setupLifeMs, current, record.id);
-    }
-    return { record, token };
-  });
-  return prepare();
+  const record = await auth.getSetupCandidate(companyId);
+  if (!record) return null;
+  let update = { tokenHash: sha256(token), expiresAt: current + setupLifeMs, sentAt: current };
+  if (enforceLimits) {
+    if (current - record.setup_last_sent_at < resendCooldownMs) return { limited: true };
+    const resetWindow = current - record.setup_resend_window_started_at >= resendWindowMs;
+    const count = resetWindow ? 0 : record.setup_resend_count;
+    if (count >= maxResends) return { limited: true };
+    update = { ...update, count: count + 1, windowStart: resetWindow ? current : record.setup_resend_window_started_at };
+  }
+  // Optimistic write: a concurrent request that already issued a link makes this one a no-op "limited".
+  if (!await auth.updateSetupToken(record.id, record.setup_last_sent_at, update)) return { limited: true };
+  return { record, token };
 }
 
 async function sendSetupFor(companyId) {
-  const prepared = prepareSetupEmail(companyId);
+  const prepared = await prepareSetupEmail(companyId);
   if (!prepared || prepared.limited) throw new InputError('Password setup email is not available yet. Wait before requesting another email.', 429);
   const { record, token } = prepared;
   await sendSetupEmail({ to: record.email, contactName: record.contact_name, companyName: record.company_name, userId: record.user_id, setupUrl: setupUrl(token) });
@@ -114,15 +107,9 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, emailConfigured: Bool
 
 app.post('/api/registrations', asyncRoute(async (req, res) => {
   const data = validateRegistration(req.body);
-  if (db.prepare('SELECT 1 FROM companies WHERE email=? COLLATE NOCASE').get(data.email)) throw new InputError('This email already has a registration. Try signing in or request a new verification email.', 409);
+  if (await auth.emailExists(data.email)) throw new InputError('This email already has a registration. Try signing in or request a new verification email.', 409);
   const id = newId(); const otp = newOtp(); const sentAt = now();
-  const create = db.transaction(() => {
-    db.prepare(`INSERT INTO companies (id,company_name,pan,msme,address1,address2,country,country_code,state,city,postal,contact_name,email,phone_e164,created_at)
-      VALUES (@id,@companyName,@pan,@msme,@address1,@address2,@country,@countryCode,@state,@city,@postal,@contactName,@email,@phone, @createdAt)`).run({ ...data, id, createdAt: isoNow() });
-    db.prepare(`INSERT INTO otp_challenges (company_id,otp_hash,expires_at,attempts,resend_count,resend_window_started_at,last_sent_at)
-      VALUES (?,?,?,0,0,?,?)`).run(id, hashOtp(otp).toString('hex'), sentAt + otpLifeMs, sentAt, sentAt);
-  });
-  create();
+  await auth.createRegistration(data, id, isoNow(), { hash: hashOtp(otp).toString('hex'), expiresAt: sentAt + otpLifeMs, sentAt });
   let emailDelivery = 'sent';
   try { await sendOtpEmail({ to: data.email, contactName: data.contactName, companyName: data.companyName, otp }); }
   catch { emailDelivery = 'failed'; }
@@ -131,8 +118,7 @@ app.post('/api/registrations', asyncRoute(async (req, res) => {
 
 app.post('/api/registrations/:id/resend-otp', asyncRoute(async (req, res) => {
   const id = req.params.id;
-  const record = db.prepare(`SELECT c.email,c.contact_name,c.company_name,c.status,o.* FROM companies c
-    JOIN otp_challenges o ON o.company_id=c.id WHERE c.id=?`).get(id);
+  const record = await auth.getOtpRecord(id);
   if (!record || record.status !== 'PENDING') throw new InputError('Registration is unavailable for verification.', 404);
   const current = now();
   if (current - record.last_sent_at < resendCooldownMs) throw new InputError('Wait before requesting another code.', 429);
@@ -141,8 +127,7 @@ app.post('/api/registrations/:id/resend-otp', asyncRoute(async (req, res) => {
   const count = resetWindow ? 1 : record.resend_count + 1;
   if (count > maxResends) throw new InputError('The resend limit has been reached. Try again later.', 429);
   const otp = newOtp();
-  db.prepare(`UPDATE otp_challenges SET otp_hash=?,expires_at=?,attempts=0,resend_count=?,resend_window_started_at=?,last_sent_at=? WHERE company_id=?`)
-    .run(hashOtp(otp).toString('hex'), current + otpLifeMs, count, start, current, id);
+  await auth.replaceOtp(id, { hash: hashOtp(otp).toString('hex'), expiresAt: current + otpLifeMs, count, windowStart: start, sentAt: current });
   try { await sendOtpEmail({ to: record.email, contactName: record.contact_name, companyName: record.company_name, otp }); }
   catch { return res.status(502).json({ error: 'A new code was prepared, but email delivery failed. Retry after the cooldown.' }); }
   res.json({ emailDelivery: 'sent', message: 'A new verification code was sent.' });
@@ -151,25 +136,17 @@ app.post('/api/registrations/:id/resend-otp', asyncRoute(async (req, res) => {
 app.post('/api/registrations/:id/verify-email', asyncRoute(async (req, res) => {
   const { otp } = req.body || {};
   if (typeof otp !== 'string' || !/^\d{6}$/.test(otp)) throw new InputError('Enter the six-digit verification code.');
-  const challenge = db.prepare(`SELECT c.id,c.status,c.email,c.contact_name,c.company_name,o.otp_hash,o.expires_at,o.attempts
-    FROM companies c JOIN otp_challenges o ON o.company_id=c.id WHERE c.id=?`).get(req.params.id);
+  const challenge = await auth.getOtpRecord(req.params.id);
   if (!challenge || challenge.status !== 'PENDING') throw new InputError('Registration is unavailable or already verified.', 409);
   if (challenge.expires_at <= now()) throw new InputError('This code expired. Request another code.', 410);
   if (challenge.attempts >= maxAttempts) throw new InputError('Too many incorrect attempts. Request a new code.', 429);
   if (!otpMatches(otp, challenge.otp_hash)) {
-    db.prepare('UPDATE otp_challenges SET attempts=attempts+1 WHERE company_id=? AND attempts<?').run(challenge.id, maxAttempts);
+    await auth.bumpOtpAttempts(challenge.id, maxAttempts);
     throw new InputError('That verification code is incorrect.', 400);
   }
   const userId = newUserId(); const setupToken = newSecret(32); const verifiedAt = isoNow();
-  const finish = db.transaction(() => {
-    db.prepare(`UPDATE companies SET status='VERIFIED',verified_at=? WHERE id=?`).run(verifiedAt, challenge.id);
-    db.prepare('DELETE FROM otp_challenges WHERE company_id=?').run(challenge.id);
-    const verifiedTime = now();
-    db.prepare(`INSERT INTO users (id,company_id,user_id,setup_token_hash,setup_expires_at,created_at,email_verified,must_change_password,password_setup_status,setup_resend_count,setup_resend_window_started_at,setup_last_sent_at)
-      VALUES (?,?,?,?,?,?,1,1,'PENDING',0,?,?)`)
-      .run(newId(), challenge.id, userId, sha256(setupToken), verifiedTime + setupLifeMs, verifiedAt, verifiedTime, verifiedTime);
-  });
-  finish();
+  const done = await auth.completeVerification({ companyId: challenge.id, verifiedAt, userRowId: newId(), userId, setupTokenHash: sha256(setupToken), verifiedTime: now(), setupLifeMs });
+  if (!done) throw new InputError('Registration is unavailable or already verified.', 409);
   let emailDelivery = 'sent';
   try { await sendSetupEmail({ to: challenge.email, contactName: challenge.contact_name, companyName: challenge.company_name, userId, setupUrl: setupUrl(setupToken) }); }
   catch { emailDelivery = 'failed'; }
@@ -177,8 +154,7 @@ app.post('/api/registrations/:id/verify-email', asyncRoute(async (req, res) => {
 }));
 
 app.post('/api/registrations/:id/resend-setup', passwordSetupIpLimiter, passwordSetupIpCooldown, asyncRoute(async (req, res) => {
-  const record = db.prepare('SELECT u.id FROM users u WHERE u.company_id=? AND u.password_hash IS NULL').get(req.params.id);
-  if (!record) throw new InputError('Password setup is unavailable for this registration.', 409);
+  if (!await auth.hasPendingSetupUser(req.params.id)) throw new InputError('Password setup is unavailable for this registration.', 409);
   try { await sendSetupFor(req.params.id); }
   catch (error) { if (error instanceof InputError) throw error; return res.status(502).json({ error: 'Password setup email could not be sent. Try again later.' }); }
   res.json({ emailDelivery: 'sent', message: 'A new password setup link was sent.' });
@@ -188,11 +164,9 @@ const genericSetupResponse = { message: 'If the account is eligible, a setup lin
 app.post('/api/auth/resend-password-setup', passwordSetupIpLimiter, passwordSetupIpCooldown, asyncRoute(async (req, res) => {
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase().slice(0, 254) : '';
   // Lookups, quotas and delivery errors intentionally share the same public response.
-  const company = email ? db.prepare(`SELECT c.id FROM companies c JOIN users u ON u.company_id=c.id
-    WHERE c.email=? COLLATE NOCASE AND c.status='VERIFIED' AND u.email_verified=1
-    AND u.password_setup_status='PENDING' AND u.must_change_password=1 AND u.password_hash IS NULL`).get(email) : null;
-  if (company) {
-    const prepared = prepareSetupEmail(company.id);
+  const companyId = email ? await auth.findSetupEligibleCompanyIdByEmail(email) : null;
+  if (companyId) {
+    const prepared = await prepareSetupEmail(companyId);
     if (prepared?.record && !prepared.limited) {
       try {
         await sendSetupEmail({ to: prepared.record.email, contactName: prepared.record.contact_name, companyName: prepared.record.company_name, userId: prepared.record.user_id, setupUrl: setupUrl(prepared.token) });
@@ -209,15 +183,10 @@ app.post('/api/auth/setup-password', asyncRoute(async (req, res) => {
   if (typeof token !== 'string' || token.length < 30) throw new InputError('This password setup link is invalid or expired.', 410);
   if (!validatePassword(password)) throw new InputError('Use at least 12 characters with uppercase, lowercase, a number and a special character.');
   if (password !== confirmation) throw new InputError('The password confirmation does not match.');
-  const user = db.prepare(`SELECT u.id,u.user_id,u.company_id,c.email,c.contact_name FROM users u JOIN companies c ON c.id=u.company_id
-    WHERE u.setup_token_hash=? AND u.setup_expires_at>? AND u.password_hash IS NULL AND u.email_verified=1
-      AND u.password_setup_status='PENDING' AND u.must_change_password=1`).get(sha256(token), now());
+  const user = await auth.findUserBySetupToken(sha256(token), now());
   if (!user) throw new InputError('This password setup link is invalid or expired.', 410);
   const hash = await hashPassword(password);
-  const used = db.prepare(`UPDATE users SET password_hash=?,setup_token_hash=NULL,setup_expires_at=NULL,password_changed_at=?,password_setup_status='COMPLETED',must_change_password=0
-    WHERE id=? AND setup_token_hash=? AND setup_expires_at>? AND password_hash IS NULL AND email_verified=1
-      AND password_setup_status='PENDING' AND must_change_password=1`).run(hash, isoNow(), user.id, sha256(token), now());
-  if (!used.changes) throw new InputError('This password setup link has already been used.', 410);
+  if (!await auth.completePasswordSetup(user.id, sha256(token), now(), hash, isoNow())) throw new InputError('This password setup link has already been used.', 410);
   res.json({ setup: true, userId: user.user_id });
 }));
 
@@ -226,7 +195,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
   const wait = failedLoginLimiter.blockedFor(req, userId);
   if (wait) return sendTooMany(res, wait, loginBlockedMessage);
-  const user = db.prepare(`SELECT u.id,u.user_id,u.password_hash FROM users u WHERE u.user_id=? COLLATE NOCASE`).get(userId);
+  const user = await auth.findUserByUserId(userId);
   const valid = Boolean(user?.password_hash && password && await verifyPassword(user.password_hash, password).catch(error => {
     console.warn(`Company login: password verification threw (${error?.code || error?.name || 'Error'}).`);
     return false;
@@ -234,59 +203,61 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   if (!valid) { failedLoginLimiter.fail(req, userId); throw new InputError('The User ID or password is incorrect.', 401); }
   failedLoginLimiter.reset(req, userId);
   const token = newSecret(32); const expiresAt = now() + sessionLifeMs;
-  db.prepare('INSERT INTO sessions (token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)').run(sha256(token), user.id, expiresAt, isoNow());
+  await auth.createSession({ tokenHash: sha256(token), userRowId: user.id, expiresAt, createdAt: isoNow() });
   res.setHeader('Set-Cookie', `${cookieName}=${encodeURIComponent(token)}; ${cookieOptions}`);
   res.json({ authenticated: true, userId: user.user_id, expiresAt: new Date(expiresAt).toISOString() });
 }));
 
 app.get('/api/auth/session', requireAuth, (req, res) => res.json({ authenticated: true, userId: req.session.user_id }));
 
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/logout', asyncRoute(async (req, res) => {
   const token = readCookie(req, cookieName);
-  if (token) db.prepare('DELETE FROM sessions WHERE token_hash=?').run(sha256(token));
+  if (token) await auth.deleteSession(sha256(token));
   res.setHeader('Set-Cookie', `${cookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
   res.json({ loggedOut: true });
-});
+}));
 
-app.get('/api/company/profile', requireAuth, (req, res) => {
-  const company = db.prepare(`SELECT c.company_name AS companyName,c.pan,c.msme,c.address1,c.address2,c.country,c.country_code AS countryCode,c.state,c.city,c.postal,c.contact_name AS contactName,c.email,c.phone_e164 AS phone,c.created_at AS registeredAt,u.email_verified AS emailVerified
-    FROM companies c JOIN users u ON u.company_id=c.id WHERE c.id=? AND u.id=?`).get(req.session.company_id, req.session.account_id);
+app.get('/api/company/profile', requireAuth, asyncRoute(async (req, res) => {
+  const company = await auth.getProfile(req.session.company_id, req.session.account_id);
   if (!company) return res.status(404).json({ error: 'Company profile not found.' });
   res.json({ company });
-});
+}));
 
-app.post('/api/company/profile', requireAuth, (req, res) => {
-  const existing = db.prepare('SELECT email,country,country_code FROM companies WHERE id=?').get(req.session.company_id);
+app.post('/api/company/profile', requireAuth, asyncRoute(async (req, res) => {
+  const existing = await auth.getCompanyLocation(req.session.company_id);
   if (!existing) throw new InputError('Company profile not found.', 404);
   if (existing.country_code !== 'IN' || existing.country !== 'India') {
     throw new InputError('This legacy profile is read-only until its India location details are reviewed.', 409);
   }
   const data = validateCompanyProfile(req.body, existing.email);
-  db.prepare(`UPDATE companies SET company_name=?,pan=?,msme=?,address1=?,address2=?,country='India',country_code='IN',state=?,city=?,postal=?,contact_name=?,phone_e164=? WHERE id=?`)
-    .run(data.companyName, data.pan || null, data.msme || null, data.address1, data.address2 || null, data.state, data.city, data.postal, data.contactName, data.phone || null, req.session.company_id);
-  const company = db.prepare(`SELECT c.company_name AS companyName,c.pan,c.msme,c.address1,c.address2,c.country,c.country_code AS countryCode,c.state,c.city,c.postal,c.contact_name AS contactName,c.email,c.phone_e164 AS phone,c.created_at AS registeredAt,u.email_verified AS emailVerified
-    FROM companies c JOIN users u ON u.company_id=c.id WHERE c.id=? AND u.id=?`).get(req.session.company_id, req.session.account_id);
+  await auth.updateProfile(req.session.company_id, data);
+  const company = await auth.getProfile(req.session.company_id, req.session.account_id);
   res.json({ company, message: 'Company profile updated.' });
-});
+}));
 
 app.post('/api/auth/change-password', requireAuth, asyncRoute(async (req, res) => {
   const { currentPassword, newPassword, confirmation } = req.body || {};
-  const user = db.prepare('SELECT id,password_hash FROM users WHERE id=?').get(req.session.account_id);
+  const user = await auth.getUserById(req.session.account_id);
   if (!user?.password_hash || !await verifyPassword(user.password_hash, currentPassword || '').catch(() => false)) throw new InputError('Current password is incorrect.', 400);
   if (!validatePassword(newPassword)) throw new InputError('Use at least 12 characters with uppercase, lowercase, a number and a special character.');
   if (newPassword === currentPassword) throw new InputError('Your new password must be different from the current password.');
   if (newPassword !== confirmation) throw new InputError('The password confirmation does not match.');
   const hash = await hashPassword(newPassword); const changedAt = isoNow();
-  db.prepare('UPDATE users SET password_hash=?,password_changed_at=? WHERE id=?').run(hash, changedAt, user.id);
-  const company = db.prepare('SELECT email,contact_name FROM companies WHERE id=?').get(req.session.company_id);
+  await auth.setPassword(user.id, hash, changedAt);
+  const company = await auth.getCompanyContact(req.session.company_id);
   let notification = 'sent';
   try { await sendPasswordChangedEmail({ to: company.email, contactName: company.contact_name, changedAt }); } catch { notification = 'failed'; }
   res.json({ changed: true, notification });
 }));
 
-app.use('/api', createPlatformRouter({ db, requireCompanyAuth: requireAuth }));
+if (driver === 'sqlite') {
+  app.use('/api', createPlatformRouter({ db, requireCompanyAuth: requireAuth }));
+} else {
+  // ponytail: only the company-auth group is ported to Mongo so far; student/challenge/assessment routes still need repositories.
+  app.use('/api', (_req, res) => res.status(501).json({ error: 'This endpoint is not available on the MongoDB driver yet.' }));
+}
 
-if (process.env.NODE_ENV !== 'test') {
+if (driver === 'sqlite' && process.env.NODE_ENV !== 'test') {
   const assessmentExpirySweep = setInterval(() => {
     try { expireAssessmentAttempts(db); } catch { /* The next sweep retries without changing attempt data. */ }
   }, 15_000);
@@ -299,7 +270,7 @@ app.use((error, _req, res, _next) => {
   let status = 500; let message = 'Something went wrong. Please try again.';
   if (error?.type === 'entity.too.large') { status = 413; message = 'The request is too large.'; }
   else if (error?.type?.startsWith('entity.') || error instanceof SyntaxError) { status = 400; message = 'The request could not be read.'; }
-  else if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE') { status = 409; message = 'This record already exists.'; }
+  else if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || error?.code === 11000) { status = 409; message = 'This record already exists.'; }
   if (status >= 500) console.error(`OSF API request failed (${error?.code || error?.name || 'Error'}).`);
   res.status(status).json({ error: message });
 });
