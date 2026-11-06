@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { studentApi } from './studentApi.js';
 import { errorMessage, Field, formatDate, LoadingState, PageTitle, StateBlock, StatusPill, StudentIcon } from './StudentUI.jsx';
 
@@ -324,10 +324,22 @@ function SubmissionPanel({ application, submission, canEdit, isSubmitted, onSave
   const [fileName, setFileName] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
-  useEffect(() => { setForm({ githubUrl: submission?.githubUrl || '', deployedUrl: submission?.deployedUrl || '', supportingInformation: submission?.supportingInformation || '', fileReference: submission?.fileReference || '' }); }, [submission?.id, submission?.updatedAt, submission?.fileReference]);
+  useEffect(() => { setForm({ githubUrl: submission?.githubUrl || '', deployedUrl: submission?.deployedUrl || '', supportingInformation: submission?.supportingInformation || '', fileReference: submission?.fileReference || '' }); setFileName(submission?.file?.name || ''); }, [submission?.id, submission?.updatedAt, submission?.fileReference, submission?.file?.name]);
+
+  async function download() {
+    setError(''); setSaved(''); setDownloading(true);
+    try {
+      const result = await studentApi.downloadFile(application.id);
+      const objectUrl = URL.createObjectURL(result.blob);
+      const link = document.createElement('a'); link.href = objectUrl; link.download = result.filename; document.body.appendChild(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (downloadError) { setError(errorMessage(downloadError)); }
+    finally { setDownloading(false); }
+  }
 
   async function upload() {
     if (!selectedFile) return setError('Choose a file before uploading.');
@@ -353,10 +365,10 @@ function SubmissionPanel({ application, submission, canEdit, isSubmitted, onSave
   }
 
   return <section className="sp-panel sp-submission-panel"><div className="sp-panel-heading"><div><span className="sp-eyebrow">TASK DELIVERY</span><h2>{isSubmitted ? 'Your submission' : 'Submit your work'}</h2></div>{isSubmitted && <StatusPill tone="success">Submitted {formatDate(submission?.submittedAt || application.submission?.submittedAt)}</StatusPill>}</div>
-    {submission ? <div className="sp-existing-submission"><div><strong>Current submission</strong><span>Updated {formatDate(submission.updatedAt || submission.submittedAt, true)}</span></div><div className="sp-submission-links">{submission.githubUrl && <a href={submission.githubUrl} target="_blank" rel="noreferrer">GitHub repository <StudentIcon name="arrow" size={14} /></a>}{submission.deployedUrl && <a href={submission.deployedUrl} target="_blank" rel="noreferrer">Deployed project <StudentIcon name="arrow" size={14} /></a>}{submission.fileReference && <span><StudentIcon name="file" size={15} /> {fileName || `File attached · ${submission.fileReference.slice(0, 8)}`}</span>}{submission.supportingInformation && <p>{submission.supportingInformation}</p>}</div></div> : <p className="sp-muted">Share a repository, live project, file, or supporting notes. You can use more than one method.</p>}
+    {submission ? <div className="sp-existing-submission"><div><strong>{isSubmitted ? 'Current submission' : 'Saved draft'}</strong><span>Updated {formatDate(submission.updatedAt || submission.submittedAt, true)}</span></div><div className="sp-submission-links">{submission.githubUrl && <a href={submission.githubUrl} target="_blank" rel="noreferrer">GitHub repository <StudentIcon name="arrow" size={14} /></a>}{submission.deployedUrl && <a href={submission.deployedUrl} target="_blank" rel="noreferrer">Deployed project <StudentIcon name="arrow" size={14} /></a>}{submission.fileReference && <div className="sp-uploaded-file"><StudentIcon name="file" size={16} /><span>{submission.file?.name || fileName || 'Uploaded file'}</span>{submission.file ? <button className="sp-button sp-button-secondary" type="button" onClick={download} disabled={downloading}>{downloading ? 'Downloading…' : 'Download'}</button> : <StatusPill tone="warning">Unavailable</StatusPill>}</div>}{submission.supportingInformation && <p>{submission.supportingInformation}</p>}</div></div> : <p className="sp-muted">Share a repository, live project, file, or supporting notes. You can use more than one method.</p>}
     {!canEdit ? <StateBlock title={isSubmitted ? 'Your task deadline has passed' : 'This task can no longer be submitted'}>Existing submission and company review details remain available above.</StateBlock> : application.status === 'APPLIED' && !isSubmitted ? <StateBlock title="Start your task to enable submissions">Use the Start task action above to mark your application in progress.</StateBlock> : <form className="sp-submission-form" onSubmit={submit}><div className="sp-form-grid"><Field label="GitHub repository URL" type="url" value={form.githubUrl} onChange={event => setForm(current => ({ ...current, githubUrl: event.target.value }))} maxLength={2048} placeholder="https://github.com/…" /><Field label="Deployed project URL" type="url" value={form.deployedUrl} onChange={event => setForm(current => ({ ...current, deployedUrl: event.target.value }))} maxLength={2048} placeholder="https://…" /><Field className="sp-field-full" label="Supporting information" as="textarea" rows={4} maxLength={5000} value={form.supportingInformation} onChange={event => setForm(current => ({ ...current, supportingInformation: event.target.value }))} placeholder="Anything the company should know about your work." /></div>
       <div className="sp-upload-row"><label className="sp-field"><span>Submission file</span><input type="file" accept=".pdf,.txt,.zip,.png,.jpg,.jpeg,application/pdf,text/plain,application/zip,image/png,image/jpeg" onChange={event => { setSelectedFile(event.target.files?.[0] || null); setError(''); }} /><small>PDF, TXT, ZIP, PNG or JPG · up to 10 MB</small></label><button className="sp-button sp-button-secondary" type="button" onClick={upload} disabled={!selectedFile || uploading}>{uploading ? 'Uploading…' : 'Upload file'}</button></div>
-      {form.fileReference && <div className="sp-uploaded-file"><StudentIcon name="file" size={16} /><span>{fileName || `Uploaded file · ${form.fileReference.slice(0, 8)}`}</span><StatusPill tone="success">Ready</StatusPill></div>}
+      {form.fileReference && <div className="sp-uploaded-file"><StudentIcon name="file" size={16} /><span>{fileName || 'Uploaded file'}</span><button className="sp-button sp-button-secondary" type="button" onClick={download} disabled={downloading}>{downloading ? 'Downloading…' : 'Download'}</button><StatusPill tone="success">Ready</StatusPill></div>}
       {error && <div className="student-alert student-alert-error" role="alert">{error}</div>}{saved && <div className="student-alert student-alert-success" role="status">{saved}</div>}
       <div className="sp-form-actions"><span>OSF confirms the submission after the server accepts it.</span><button className="sp-button sp-button-primary" type="submit" disabled={saving || uploading}>{saving ? 'Submitting…' : isSubmitted ? 'Update submission' : 'Submit work'}</button></div>
     </form>}
@@ -376,11 +388,18 @@ export function SkillVerificationPage({ go }) {
   }
   useEffect(() => { load(); }, []);
   const attemptsByAssessment = Object.fromEntries(attempts.map(attempt => [attempt.assessmentId, attempt]));
+  const available = [...assessments];
+  for (const attempt of attempts) {
+    if (!available.some(assessment => assessment.id === attempt.assessmentId)) available.push({
+      id: attempt.assessmentId, title: attempt.assessmentTitle, relatedSkill: 'Previous assessment',
+      durationMinutes: attempt.durationMinutes, status: attempt.assessmentStatus,
+    });
+  }
   return <>
     <PageTitle eyebrow="SHOW WHAT YOU KNOW" title="Skill verification" description="Attempt company-created assessments and follow the manual review from your workspace." />
-    {loading ? <LoadingState label="Loading available assessments…" /> : error ? <StateBlock title="Assessments couldn’t be loaded" tone="error" action={<button className="sp-button sp-button-secondary" onClick={load}>Retry</button>}>{error}</StateBlock> : assessments.length ? <div className="sp-assessment-grid">{assessments.map(assessment => {
+    {loading ? <LoadingState label="Loading available assessments…" /> : error ? <StateBlock title="Assessments couldn’t be loaded" tone="error" action={<button className="sp-button sp-button-secondary" onClick={load}>Retry</button>}>{error}</StateBlock> : available.length ? <div className="sp-assessment-grid">{available.map(assessment => {
       const attempt = attemptsByAssessment[assessment.id];
-      return <article className="sp-assessment-card" key={assessment.id}><div className="sp-assessment-icon"><StudentIcon name="medal" size={20} /></div><div className="sp-assessment-head"><span className="sp-chip">{assessment.relatedSkill}</span>{attempt && <StatusPill tone={statusTone(attempt.status)}>{prettyStatus(attempt.status)}</StatusPill>}</div><h2>{assessment.title}</h2><p>{assessment.description || 'A company-created assessment to demonstrate your skills.'}</p><div className="sp-assessment-meta"><span>{assessment.durationMinutes ? `${assessment.durationMinutes} min` : 'No time limit'}</span><span>Manual company review</span></div><button className="sp-button sp-button-secondary sp-card-action" onClick={() => go(`/student/assessments/${encodeURIComponent(assessment.id)}`)}>{attempt?.status === 'IN_PROGRESS' ? 'Continue attempt' : attempt ? 'View attempt' : 'View assessment'} <StudentIcon name="arrow" size={15} /></button></article>;
+      return <article className="sp-assessment-card" key={assessment.id}><div className="sp-assessment-icon"><StudentIcon name="medal" size={20} /></div><div className="sp-assessment-head"><span className="sp-chip">{assessment.relatedSkill}</span>{attempt && <StatusPill tone={statusTone(attempt.status)}>{prettyStatus(attempt.status)}</StatusPill>}{assessment.status === 'CLOSED' && <StatusPill>Closed</StatusPill>}</div><h2>{assessment.title}</h2><p>{assessment.description || (assessment.status === 'CLOSED' ? 'This assessment is closed to new attempts. Your history and review remain available.' : 'A company-created assessment to demonstrate your skills.')}</p><div className="sp-assessment-meta"><span>{assessment.durationMinutes ? `${assessment.durationMinutes} min` : 'No time limit'}</span><span>Manual company review</span></div><button className="sp-button sp-button-secondary sp-card-action" onClick={() => go(`/student/assessments/${encodeURIComponent(assessment.id)}`)}>{attempt?.status === 'IN_PROGRESS' ? 'Continue attempt' : attempt ? 'View attempt' : 'View assessment'} <StudentIcon name="arrow" size={15} /></button></article>;
     })}</div> : <StateBlock title="No assessments are available yet">Published company assessments will appear here.</StateBlock>}
   </>;
 }
@@ -392,18 +411,34 @@ export function AssessmentPage({ assessmentId, go, notify }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [saveState, setSaveState] = useState('');
   const [secondsLeft, setSecondsLeft] = useState(null);
+  const answersRef = useRef({});
+  const saveQueue = useRef(Promise.resolve());
+  const saveSequence = useRef(0);
+  const expiryRefresh = useRef(false);
+  const monotonicDeadline = useRef(null);
+
+  function acceptAttempt(nextAttempt) {
+    setAttempt(nextAttempt);
+    monotonicDeadline.current = nextAttempt?.expiresAt && nextAttempt?.serverNow
+      ? performance.now() + Math.max(0, Date.parse(nextAttempt.expiresAt) - Date.parse(nextAttempt.serverNow)) : null;
+  }
 
   async function load() {
     setLoading(true); setError('');
+    setAttempt(null); setAssessment(null); setAnswers({}); answersRef.current = {}; monotonicDeadline.current = null;
+    saveQueue.current = Promise.resolve(); saveSequence.current = 0; expiryRefresh.current = false;
     try {
       const result = await studentApi.assessment(assessmentId); setAssessment(result.assessment);
       const attemptResult = await studentApi.attempts();
       const existing = (attemptResult.attempts || []).find(item => item.assessmentId === assessmentId);
       if (existing) {
         const fullAttempt = await studentApi.attempt(existing.id);
-        setAttempt(fullAttempt.attempt);
-        setAnswers(Object.fromEntries((fullAttempt.attempt.questions || []).filter(question => question.selectedOption).map(question => [question.id, question.selectedOption])));
+        acceptAttempt(fullAttempt.attempt);
+        const savedAnswers = Object.fromEntries((fullAttempt.attempt.questions || []).filter(question => question.selectedOption).map(question => [question.id, question.selectedOption]));
+        answersRef.current = savedAnswers; setAnswers(savedAnswers);
+        setSaveState('');
       }
     } catch (loadError) { setError(errorMessage(loadError)); }
     finally { setLoading(false); }
@@ -411,37 +446,69 @@ export function AssessmentPage({ assessmentId, go, notify }) {
   useEffect(() => { load(); }, [assessmentId]);
   useEffect(() => {
     if (!attempt?.durationMinutes || !attempt.startedAt || attempt.status !== 'IN_PROGRESS') { setSecondsLeft(null); return undefined; }
-    const update = () => setSecondsLeft(Math.max(0, Math.ceil((Date.parse(attempt.startedAt) + attempt.durationMinutes * 60000 - Date.now()) / 1000)));
+    const update = () => {
+      const deadline = monotonicDeadline.current ?? (Date.parse(attempt.startedAt) + attempt.durationMinutes * 60000);
+      const currentTime = monotonicDeadline.current == null ? Date.now() : performance.now();
+      const remaining = Math.max(0, Math.ceil((deadline - currentTime) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining === 0 && !expiryRefresh.current) {
+        expiryRefresh.current = true;
+        studentApi.attempt(attempt.id).then(result => acceptAttempt(result.attempt)).catch(loadError => setError(errorMessage(loadError)));
+      }
+    };
+    expiryRefresh.current = false;
     update(); const timer = window.setInterval(update, 1000); return () => window.clearInterval(timer);
   }, [attempt?.id, attempt?.startedAt, attempt?.durationMinutes, attempt?.status]);
 
+  function selectAnswer(questionId, selectedOption) {
+    const snapshot = { ...answersRef.current, [questionId]: selectedOption };
+    answersRef.current = snapshot;
+    setAnswers(snapshot);
+    const sequence = ++saveSequence.current;
+    setSaveState('saving'); setError('');
+    const pending = saveQueue.current.catch(() => {}).then(() => studentApi.saveAnswers(attempt.id,
+      Object.entries(snapshot).map(([id, option]) => ({ questionId: id, selectedOption: option }))));
+    saveQueue.current = pending.then(result => {
+      acceptAttempt(result.attempt);
+      if (sequence === saveSequence.current) setSaveState('saved');
+      return result;
+    }, saveError => {
+      if (sequence === saveSequence.current) { setSaveState('error'); setError(`Answer not saved: ${errorMessage(saveError)}`); }
+      throw saveError;
+    });
+    saveQueue.current.catch(() => {});
+  }
+
   async function start() {
     setBusy(true); setError('');
-    try { const result = await studentApi.startAttempt(assessmentId); setAttempt(result.attempt); setAnswers({}); }
+    try { const result = await studentApi.startAttempt(assessmentId); acceptAttempt(result.attempt); setAnswers({}); answersRef.current = {}; }
     catch (startError) { setError(startError.message); }
     finally { setBusy(false); }
   }
   async function submit(event) {
     event.preventDefault(); setBusy(true); setError('');
     try {
-      const result = await studentApi.submitAnswers(attempt.id, Object.entries(answers).map(([questionId, selectedOption]) => ({ questionId, selectedOption })));
-      setAttempt(result.attempt); notify('success', 'Your answers were submitted for company review.');
-    } catch (submitError) { setError(submitError.message); if (submitError.status === 409) await load(); }
+      await saveQueue.current;
+      const result = await studentApi.submitAnswers(attempt.id, Object.entries(answersRef.current).map(([questionId, selectedOption]) => ({ questionId, selectedOption })));
+      acceptAttempt(result.attempt); notify('success', 'Your answers were submitted for company review.');
+    } catch (submitError) { setError(errorMessage(submitError)); if (submitError.status === 409) { const refreshed = await studentApi.attempt(attempt.id).catch(() => null); if (refreshed) acceptAttempt(refreshed.attempt); else await load(); } }
     finally { setBusy(false); }
   }
 
   if (loading) return <LoadingState label="Loading assessment…" />;
   if (error && !assessment) return <><PageTitle eyebrow="SKILL VERIFICATION" title="Assessment unavailable" /><StateBlock title="This assessment couldn’t be opened" tone="error" action={<button className="sp-button sp-button-secondary" onClick={() => go('/student/skills')}>Back to assessments</button>}>{error}</StateBlock></>;
-  const submitted = attempt && attempt.status !== 'IN_PROGRESS';
+  const submitted = attempt && ['SUBMITTED', 'REVIEWED'].includes(attempt.status);
+  const attemptExpired = attempt?.status === 'EXPIRED';
   const expired = secondsLeft === 0;
   return <>
     <button className="sp-back-link" onClick={() => go('/student/skills')}>← Skill verification</button>
     <PageTitle eyebrow={assessment.relatedSkill} title={assessment.title} description={assessment.description || 'Company-created multiple-choice assessment.'} action={assessment.durationMinutes ? <StatusPill tone="info">{assessment.durationMinutes} minutes</StatusPill> : <StatusPill>No timer</StatusPill>} />
     {assessment.instructions && <div className="sp-panel sp-instructions"><span className="sp-eyebrow">INSTRUCTIONS</span><p>{assessment.instructions}</p></div>}
     {error && <div className="student-alert student-alert-error" role="alert">{error}</div>}
-    {!attempt ? <div className="sp-panel sp-assessment-start"><div className="sp-assessment-icon"><StudentIcon name="medal" size={22} /></div><div><h2>Ready to begin?</h2><p>This assessment allows one attempt. Your answers will be reviewed manually by the company. Correct answers and automatic scores are not shown.</p></div><button className="sp-button sp-button-primary" onClick={start} disabled={busy}>{busy ? 'Starting…' : 'Start assessment'} <StudentIcon name="arrow" size={16} /></button></div>
-      : submitted ? <section className="sp-panel sp-attempt-result"><div className="sp-panel-heading"><div><span className="sp-eyebrow">YOUR ATTEMPT</span><h2>{prettyStatus(attempt.status)}</h2></div><StatusPill tone={statusTone(attempt.status)}>{prettyStatus(attempt.status)}</StatusPill></div><p>Submitted {formatDate(attempt.submittedAt, true)}. Correct answers are not displayed.</p>{attempt.reviewStatus === 'REVIEWED' ? <div className="sp-review-card"><div className="sp-review-top">{attempt.manualScore != null && <strong className="sp-rating">{attempt.manualScore}<small>/100</small></strong>}<StatusPill tone="success">Reviewed</StatusPill></div><p>{attempt.companyFeedback || 'The company did not leave written feedback.'}</p>{attempt.reviewedAt && <small>Reviewed {formatDate(attempt.reviewedAt, true)}</small>}</div> : <StateBlock title="Waiting for company review">Your attempt has been submitted. A score or feedback will appear here when the company adds its manual review.</StateBlock>}</section>
-        : <form className="sp-panel sp-attempt-form" onSubmit={submit}><div className="sp-panel-heading"><div><span className="sp-eyebrow">YOUR ATTEMPT</span><h2>Answer the questions</h2></div>{secondsLeft != null && <StatusPill tone={expired ? 'warning' : 'info'}>{expired ? 'Time expired' : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')} remaining`}</StatusPill>}</div><p className="sp-muted">Choose one option for each question. Your score is not calculated automatically.</p>{attempt.questions.map((question, index) => <fieldset className="sp-question" key={question.id} disabled={expired || busy}><legend><span>Question {index + 1}</span>{question.questionText}</legend>{['A', 'B', 'C', 'D'].map(option => <label className={`sp-option ${answers[question.id] === option ? 'is-selected' : ''}`} key={option}><input type="radio" name={question.id} value={option} checked={answers[question.id] === option} onChange={() => setAnswers(current => ({ ...current, [question.id]: option }))} /><span className="sp-option-letter">{option}</span><span>{question[`option${option}`]}</span></label>)}</fieldset>)}<div className="sp-form-actions"><span>One attempt per assessment. You cannot change answers after submission.</span><button className="sp-button sp-button-primary" type="submit" disabled={busy || expired}>{busy ? 'Submitting…' : 'Submit answers'}</button></div></form>}
+    {!attempt ? <div className="sp-panel sp-assessment-start"><div className="sp-assessment-icon"><StudentIcon name="medal" size={22} /></div><div><h2>{assessment.status === 'CLOSED' ? 'Assessment closed' : 'Ready to begin?'}</h2><p>{assessment.status === 'CLOSED' ? 'This assessment is no longer available for new attempts.' : 'This assessment allows one attempt. Your answers will be reviewed manually by the company. Correct answers and automatic scores are not shown.'}</p></div>{assessment.status === 'PUBLISHED' && <button className="sp-button sp-button-primary" onClick={start} disabled={busy}>{busy ? 'Starting…' : 'Start assessment'} <StudentIcon name="arrow" size={16} /></button>}</div>
+      : attemptExpired ? <section className="sp-panel sp-attempt-result"><div className="sp-panel-heading"><div><span className="sp-eyebrow">YOUR ATTEMPT</span><h2>Time expired</h2></div><StatusPill tone="warning">Expired</StatusPill></div><StateBlock title="This attempt expired before submission">Answers saved before the deadline remain on your attempt. You can review the attempt here, but it cannot be edited or submitted.</StateBlock></section>
+        : submitted ? <section className="sp-panel sp-attempt-result"><div className="sp-panel-heading"><div><span className="sp-eyebrow">YOUR ATTEMPT</span><h2>{prettyStatus(attempt.status)}</h2></div><StatusPill tone={statusTone(attempt.status)}>{prettyStatus(attempt.status)}</StatusPill></div><p>Submitted {formatDate(attempt.submittedAt, true)}. Correct answers are not displayed.</p>{attempt.reviewStatus === 'REVIEWED' ? <div className="sp-review-card"><div className="sp-review-top">{attempt.manualScore != null && <strong className="sp-rating">{attempt.manualScore}<small>/100</small></strong>}<StatusPill tone="success">Reviewed</StatusPill></div><p>{attempt.companyFeedback || 'The company did not leave written feedback.'}</p>{attempt.reviewedAt && <small>Reviewed {formatDate(attempt.reviewedAt, true)}</small>}</div> : <StateBlock title="Waiting for company review">Your attempt has been submitted. A score or feedback will appear here when the company adds its manual review.</StateBlock>}</section>
+        : <form className="sp-panel sp-attempt-form" onSubmit={submit}><div className="sp-panel-heading"><div><span className="sp-eyebrow">YOUR ATTEMPT</span><h2>Answer the questions</h2></div>{secondsLeft != null && <StatusPill tone={expired ? 'warning' : 'info'}>{expired ? 'Checking expiry…' : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')} remaining`}</StatusPill>}</div><p className="sp-muted">Choose one option for each question. Your score is not calculated automatically.</p>{attempt.questions.map((question, index) => <fieldset className="sp-question" key={question.id} disabled={expired || busy}><legend><span>Question {index + 1}</span>{question.questionText}</legend>{['A', 'B', 'C', 'D'].map(option => <label className={`sp-option ${answers[question.id] === option ? 'is-selected' : ''}`} key={option}><input type="radio" name={question.id} value={option} checked={answers[question.id] === option} onChange={() => selectAnswer(question.id, option)} /><span className="sp-option-letter">{option}</span><span>{question[`option${option}`]}</span></label>)}</fieldset>)}<div className="sp-form-actions"><span>{saveState === 'saving' ? 'Saving answers…' : saveState === 'saved' ? 'All answers saved.' : saveState === 'error' ? 'Some answers need to be saved again.' : 'Answers save automatically while you work.'}</span><button className="sp-button sp-button-primary" type="submit" disabled={busy || expired || saveState === 'saving'}>{busy ? 'Submitting…' : 'Submit answers'}</button></div></form>}
   </>;
 }
 

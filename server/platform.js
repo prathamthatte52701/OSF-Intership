@@ -140,16 +140,51 @@ function syncExpiredApplication(db, application) {
   }
   return application;
 }
+function requireApplicationSubmissionState(db, applicationId, studentId) {
+  const application = syncExpiredApplication(db, assertApplicationOwner(db, applicationId, studentId));
+  if (application.status === 'EXPIRED' || Date.parse(application.individual_deadline) <= nowMs()) {
+    if (application.status !== 'EXPIRED') syncExpiredApplication(db, application);
+    throw new InputError('The individual task deadline has passed.', 409);
+  }
+  if (!['IN_PROGRESS', 'SUBMITTED'].includes(application.status)) {
+    throw new InputError('Start your task before uploading or submitting work.', 409);
+  }
+  return application;
+}
 function fileMetadata(db, applicationId, fileId) {
   return db.prepare(`SELECT id,application_id,storage_key,original_name,mime_type,size_bytes,created_at
     FROM submission_files WHERE id=? AND application_id=?`).get(fileId, applicationId);
+}
+function publicFileMetadata(db, applicationId, fileId) {
+  const file = fileMetadata(db, applicationId, fileId);
+  return file ? { id: file.id, name: file.original_name, mimeType: file.mime_type, sizeBytes: file.size_bytes, uploadedAt: file.created_at } : null;
+}
+
+export function expireAssessmentAttempts(db, currentTime = nowMs()) {
+  const attempts = db.prepare(`SELECT a.id,a.started_at,s.duration_minutes AS durationMinutes
+    FROM skill_assessment_attempts a JOIN skill_assessments s ON s.id=a.assessment_id WHERE a.status='IN_PROGRESS' AND s.duration_minutes IS NOT NULL`).all();
+  const expire = db.prepare("UPDATE skill_assessment_attempts SET status='EXPIRED',updated_at=? WHERE id=? AND status='IN_PROGRESS'");
+  const timestamp = new Date(currentTime).toISOString();
+  const markExpired = db.transaction(() => {
+    let count = 0;
+    for (const attempt of attempts) {
+      if (Date.parse(attempt.started_at) + attempt.durationMinutes * 60000 <= currentTime) count += expire.run(timestamp, attempt.id).changes;
+    }
+    return count;
+  });
+  try { return markExpired(); } catch (error) {
+    if (error.code === 'SQLITE_BUSY' || error.code === 'SQLITE_LOCKED') return 0;
+    throw error;
+  }
 }
 function sendSubmissionFile(res, file) {
   if (!file || !/^[a-f0-9]{32}\.[a-z0-9]{1,8}$/.test(file.storage_key)) throw new InputError('Submission file not found.', 404);
   const path = resolve(uploadDir, file.storage_key);
   if (dirname(path) !== uploadDir) throw new InputError('Submission file not found.', 404);
   if (!existsSync(path)) throw new InputError('Submission file not found.', 404);
-  res.type(file.mime_type).download(path, basename(file.original_name));
+  res.type(file.mime_type).download(path, basename(file.original_name), error => {
+    if (error && !res.headersSent) res.status(error.code === 'ENOENT' ? 404 : 500).json({ error: error.code === 'ENOENT' ? 'Submission file not found.' : 'The file could not be downloaded.' });
+  });
 }
 function contentMatchesType(extension, buffer) {
   if (extension === '.pdf') return buffer.subarray(0, 5).toString('ascii') === '%PDF-';
@@ -210,6 +245,8 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   const router = express.Router();
   const studentAuth = requireStudent(db);
   const companyAuth = requireCompanyAuth;
+
+  expireAssessmentAttempts(db);
 
   // Student accounts use their own table, session table, and cookie. Company users remain untouched.
   router.post('/student/auth/register', asyncRoute(async (req, res) => {
@@ -402,7 +439,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     res.status(201).json({ application: { id, challengeId: challenge.id, appliedAt: appliedIso, individualDeadline: deadline, status: 'APPLIED' } });
   });
   router.post('/student/applications/:id/start', studentAuth, (req, res) => {
-    const application = assertApplicationOwner(db, req.params.id, req.student.student_id);
+    const application = syncExpiredApplication(db, assertApplicationOwner(db, req.params.id, req.student.student_id));
     if (!assertApplicationDeadline(application)) {
       syncExpiredApplication(db, application);
       throw new InputError('The individual task deadline has passed.', 409);
@@ -493,14 +530,14 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     const application = syncExpiredApplication(db, ownedApplication(db, req.params.id, req.session.company_id));
     const profile = studentProfile(db, application.student_id, { includeResume: true });
     const submission = db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
-      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=?`).get(application.id) || null;
+      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=? AND submitted_at IS NOT NULL`).get(application.id) || null;
     if (submission?.fileReference) submission.file = fileMetadata(db, application.id, submission.fileReference) ? { id: submission.fileReference } : null;
     const evaluation = db.prepare('SELECT id,rating,feedback,is_shortlisted AS isShortlisted,evaluated_at AS evaluatedAt FROM evaluations WHERE application_id=?').get(application.id) || null;
     res.json({ application: { id: application.id, challengeId: application.challenge_id, appliedAt: application.applied_at, individualDeadline: application.individual_deadline, status: application.status, student: profile, submission, evaluation } });
   });
   router.get('/company/applications/:id/file', companyAuth, (req, res) => {
     const application = ownedApplication(db, req.params.id, req.session.company_id);
-    const file = db.prepare(`SELECT f.* FROM submission_files f JOIN submissions s ON s.file_reference=f.id WHERE f.application_id=?`).get(application.id);
+    const file = db.prepare(`SELECT f.* FROM submission_files f JOIN submissions s ON s.file_reference=f.id WHERE f.application_id=? AND s.submitted_at IS NOT NULL`).get(application.id);
     sendSubmissionFile(res, file);
   });
   router.get('/student/applications/:id/file', studentAuth, (req, res) => {
@@ -511,8 +548,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   router.put('/student/applications/:id/file', studentAuth, express.raw({
     type: ['application/octet-stream', ...[...publicFileTypes.values()].flatMap(types => [...types])], limit: '10mb',
   }), asyncRoute(async (req, res) => {
-    const application = assertApplicationOwner(db, req.params.id, req.student.student_id);
-    if (!assertApplicationDeadline(application)) throw new InputError('The individual task deadline has passed.', 409);
+    const application = requireApplicationSubmissionState(db, req.params.id, req.student.student_id);
     if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new InputError('Upload a non-empty file.');
     const fileNameHeader = req.get('x-file-name');
     if (!fileNameHeader || fileNameHeader.length > 180) throw new InputError('Provide a file name of 180 characters or fewer in X-File-Name.');
@@ -527,10 +563,23 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     await writeFile(filePath, req.body, { flag: 'wx', mode: 0o600 });
     const id = newId(); const timestamp = nowIso();
     try {
-      db.prepare('INSERT INTO submission_files(id,application_id,storage_key,original_name,mime_type,size_bytes,created_at) VALUES (?,?,?,?,?,?,?)')
-        .run(id, application.id, storageKey, originalName, mimeType, req.body.length, timestamp);
-      const existing = db.prepare('SELECT id FROM submissions WHERE application_id=?').get(application.id);
-      if (existing) db.prepare('UPDATE submissions SET file_reference=?,updated_at=? WHERE application_id=?').run(id, timestamp, application.id);
+      const saveFile = db.transaction(() => {
+        const current = syncExpiredApplication(db, assertApplicationOwner(db, application.id, req.student.student_id));
+        if (!['IN_PROGRESS', 'SUBMITTED'].includes(current.status) || Date.parse(current.individual_deadline) <= nowMs()) {
+          syncExpiredApplication(db, current);
+          return false;
+        }
+        db.prepare('INSERT INTO submission_files(id,application_id,storage_key,original_name,mime_type,size_bytes,created_at) VALUES (?,?,?,?,?,?,?)')
+          .run(id, application.id, storageKey, originalName, mimeType, req.body.length, timestamp);
+        db.prepare(`INSERT INTO submissions(id,application_id,file_reference,created_at,updated_at) VALUES (?,?,?,?,?)
+          ON CONFLICT(application_id) DO UPDATE SET file_reference=excluded.file_reference,updated_at=excluded.updated_at`)
+          .run(newId(), application.id, id, timestamp, timestamp);
+        return true;
+      });
+      if (!saveFile()) {
+        await unlink(filePath).catch(() => {});
+        throw new InputError('Start your task before uploading work, or check its individual deadline.', 409);
+      }
     } catch (error) {
       await unlink(filePath).catch(() => {});
       throw error;
@@ -538,8 +587,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     res.status(201).json({ file: { id, name: originalName, mimeType, sizeBytes: req.body.length } });
   }));
   router.put('/student/applications/:id/submission', studentAuth, (req, res) => {
-    const application = assertApplicationOwner(db, req.params.id, req.student.student_id);
-    if (!assertApplicationDeadline(application)) throw new InputError('The individual task deadline has passed.', 409);
+    const application = requireApplicationSubmissionState(db, req.params.id, req.student.student_id);
     const body = req.body || {};
     const githubUrl = optionalUrl(body.githubUrl, 'GitHub repository URL');
     const deployedUrl = optionalUrl(body.deployedUrl, 'Deployed website URL');
@@ -549,14 +597,20 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     if (fileReference && !fileMetadata(db, application.id, fileReference)) throw new InputError('Uploaded file not found for this application.', 400);
     const timestamp = nowIso();
     const save = db.transaction(() => {
+      const current = syncExpiredApplication(db, assertApplicationOwner(db, application.id, req.student.student_id));
+      if (!['IN_PROGRESS', 'SUBMITTED'].includes(current.status) || Date.parse(current.individual_deadline) <= nowMs()) {
+        syncExpiredApplication(db, current);
+        return false;
+      }
       db.prepare(`INSERT INTO submissions(id,application_id,github_url,deployed_url,file_reference,supporting_information,submitted_at,created_at,updated_at)
         VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(application_id) DO UPDATE SET github_url=excluded.github_url,deployed_url=excluded.deployed_url,
         file_reference=COALESCE(excluded.file_reference,submissions.file_reference),supporting_information=excluded.supporting_information,
         submitted_at=excluded.submitted_at,updated_at=excluded.updated_at`)
         .run(newId(), application.id, githubUrl, deployedUrl, fileReference, supportingInformation, timestamp, timestamp, timestamp);
       db.prepare("UPDATE applications SET status='SUBMITTED',updated_at=? WHERE id=?").run(timestamp, application.id);
+      return true;
     });
-    save();
+    if (!save()) throw new InputError('Start your task before submitting work, or check its individual deadline.', 409);
     res.json({ submission: db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
       supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=?`).get(application.id) });
   });
@@ -564,12 +618,14 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     assertApplicationOwner(db, req.params.id, req.student.student_id);
     const submission = db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
       supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=?`).get(req.params.id) || null;
+    if (submission?.fileReference) submission.file = publicFileMetadata(db, req.params.id, submission.fileReference);
     res.json({ submission });
   });
   router.get('/company/applications/:id/submission', companyAuth, (req, res) => {
     const app = ownedApplication(db, req.params.id, req.session.company_id);
     const submission = db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
-      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=?`).get(app.id) || null;
+      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=? AND submitted_at IS NOT NULL`).get(app.id) || null;
+    if (submission?.fileReference) submission.file = publicFileMetadata(db, app.id, submission.fileReference);
     res.json({ submission });
   });
   router.put('/company/applications/:id/evaluation', companyAuth, (req, res) => {
@@ -681,7 +737,10 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     res.json({ assessments });
   });
   router.get('/student/assessments/:id', studentAuth, (req, res) => {
-    const assessment = db.prepare("SELECT id,title,description,related_skill AS relatedSkill,instructions,duration_minutes AS durationMinutes FROM skill_assessments WHERE id=? AND status='PUBLISHED'").get(req.params.id);
+    const assessment = db.prepare(`SELECT id,title,description,related_skill AS relatedSkill,instructions,duration_minutes AS durationMinutes,status
+      FROM skill_assessments WHERE id=? AND (status='PUBLISHED' OR EXISTS (
+        SELECT 1 FROM skill_assessment_attempts a WHERE a.assessment_id=skill_assessments.id AND a.student_id=?
+      ))`).get(req.params.id, req.student.student_id);
     if (!assessment) throw new InputError('Assessment not found.', 404);
     assessment.questions = studentQuestions(db, assessment.id);
     res.json({ assessment });
@@ -701,11 +760,13 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     res.status(201).json({ attempt: studentAttempt(db, id) });
   });
   router.get('/student/assessment-attempts', studentAuth, (req, res) => {
+    expireAssessmentAttempts(db);
     if (!req.student.student_id) return res.json({ attempts: [] });
     const rows = db.prepare('SELECT id FROM skill_assessment_attempts WHERE student_id=? ORDER BY started_at DESC').all(req.student.student_id);
     res.json({ attempts: rows.map(row => studentAttempt(db, row.id)) });
   });
   router.get('/student/assessment-attempts/:id', studentAuth, (req, res) => {
+    expireAssessmentAttempts(db);
     const attempt = db.prepare('SELECT id FROM skill_assessment_attempts WHERE id=? AND student_id=?').get(req.params.id, req.student.student_id);
     if (!attempt) throw new InputError('Assessment attempt not found.', 404);
     res.json({ attempt: studentAttempt(db, attempt.id) });
@@ -714,11 +775,10 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     const attempt = db.prepare(`SELECT a.*,s.duration_minutes FROM skill_assessment_attempts a JOIN skill_assessments s ON s.id=a.assessment_id
       WHERE a.id=? AND a.student_id=?`).get(req.params.id, req.student.student_id);
     if (!attempt) throw new InputError('Assessment attempt not found.', 404);
-    if (attempt.status !== 'IN_PROGRESS') throw new InputError('This assessment attempt has already been submitted.', 409);
-    if (attempt.duration_minutes && Date.parse(attempt.started_at) + attempt.duration_minutes * 60000 < nowMs()) {
-      db.prepare("UPDATE skill_assessment_attempts SET status='EXPIRED',updated_at=? WHERE id=?").run(nowIso(), attempt.id);
-      throw new InputError('The assessment time limit has passed.', 409);
-    }
+    expireAssessmentAttempts(db);
+    const refreshed = db.prepare('SELECT status FROM skill_assessment_attempts WHERE id=? AND student_id=?').get(attempt.id, req.student.student_id);
+    if (!refreshed) throw new InputError('Assessment attempt not found.', 404);
+    if (refreshed.status !== 'IN_PROGRESS') throw new InputError(refreshed.status === 'EXPIRED' ? 'The assessment time limit has passed.' : 'This assessment attempt has already been submitted.', 409);
     const answers = req.body?.answers;
     if (!Array.isArray(answers) || answers.length > 500) throw new InputError('Answers must be a list of up to 500 responses.');
     const questionIds = new Set(db.prepare('SELECT id FROM skill_assessment_questions WHERE assessment_id=?').all(attempt.assessment_id).map(row => row.id));
@@ -730,13 +790,27 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     });
     if (new Set(normalized.map(answer => answer.questionId)).size !== normalized.length) throw new InputError('Each question can be answered only once.');
     const timestamp = nowIso();
-    const submit = db.transaction(() => {
+    const save = db.transaction(() => {
+      const current = db.prepare(`SELECT a.status,a.started_at,s.duration_minutes AS durationMinutes FROM skill_assessment_attempts a
+        JOIN skill_assessments s ON s.id=a.assessment_id WHERE a.id=? AND a.student_id=?`).get(attempt.id, req.student.student_id);
+      if (!current || current.status !== 'IN_PROGRESS') return current?.status || 'MISSING';
+      if (current.durationMinutes && Date.parse(current.started_at) + current.durationMinutes * 60000 <= nowMs()) {
+        db.prepare("UPDATE skill_assessment_attempts SET status='EXPIRED',updated_at=? WHERE id=? AND status='IN_PROGRESS'").run(nowIso(), attempt.id);
+        return 'EXPIRED';
+      }
       db.prepare('DELETE FROM skill_assessment_answers WHERE attempt_id=?').run(attempt.id);
       const add = db.prepare('INSERT INTO skill_assessment_answers(id,attempt_id,question_id,selected_option,created_at,updated_at) VALUES (?,?,?,?,?,?)');
       for (const answer of normalized) add.run(newId(), attempt.id, answer.questionId, answer.selectedOption, timestamp, timestamp);
+      if (req.body?.finalize === false) {
+        db.prepare("UPDATE skill_assessment_attempts SET updated_at=? WHERE id=? AND status='IN_PROGRESS'").run(timestamp, attempt.id);
+        return 'IN_PROGRESS';
+      }
       db.prepare("UPDATE skill_assessment_attempts SET submitted_at=?,status='SUBMITTED',updated_at=? WHERE id=? AND status='IN_PROGRESS'").run(timestamp, timestamp, attempt.id);
+      return 'SUBMITTED';
     });
-    submit();
+    const state = save();
+    if (state === 'EXPIRED') throw new InputError('The assessment time limit has passed.', 409);
+    if (state !== (req.body?.finalize === false ? 'IN_PROGRESS' : 'SUBMITTED')) throw new InputError('This assessment attempt is no longer editable.', 409);
     res.json({ attempt: studentAttempt(db, attempt.id) });
   });
   router.get('/company/assessments/:id/attempts', companyAuth, (req, res) => {
@@ -819,8 +893,10 @@ function studentQuestions(db, assessmentId) {
 }
 function studentAttempt(db, id) {
   const row = db.prepare(`SELECT a.id,a.assessment_id AS assessmentId,a.started_at AS startedAt,a.submitted_at AS submittedAt,a.status,a.review_status AS reviewStatus,
-    a.manual_score AS manualScore,a.company_feedback AS companyFeedback,a.reviewed_at AS reviewedAt,s.title AS assessmentTitle,s.duration_minutes AS durationMinutes
+    a.manual_score AS manualScore,a.company_feedback AS companyFeedback,a.reviewed_at AS reviewedAt,s.title AS assessmentTitle,s.duration_minutes AS durationMinutes,s.status AS assessmentStatus
     FROM skill_assessment_attempts a JOIN skill_assessments s ON s.id=a.assessment_id WHERE a.id=?`).get(id);
+  row.expiresAt = row.durationMinutes ? new Date(Date.parse(row.startedAt) + row.durationMinutes * 60000).toISOString() : null;
+  row.serverNow = nowIso();
   row.questions = studentQuestions(db, row.assessmentId).map(question => ({ ...question, selectedOption: db.prepare('SELECT selected_option FROM skill_assessment_answers WHERE attempt_id=? AND question_id=?').get(id, question.id)?.selected_option || null }));
   return row;
 }

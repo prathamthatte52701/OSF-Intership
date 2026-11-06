@@ -271,7 +271,7 @@ Platform APIs use the authenticated student or company session as the owner iden
 | GET | `/api/student/assessments`, `/api/student/assessments/:id` | Browse available assessments without answer keys |
 | POST | `/api/student/assessments/:id/attempts` | Start one attempt for an assessment |
 | GET | `/api/student/assessment-attempts`, `/api/student/assessment-attempts/:id` | View own assessment attempts |
-| PUT | `/api/student/assessment-attempts/:id/answers` | Submit selected answers for an attempt |
+| PUT | `/api/student/assessment-attempts/:id/answers` | Save draft answers with `{ "finalize": false }`; finalize with `{ "finalize": true }` (omitting `finalize` preserves the original final-submit behavior) |
 | GET | `/api/company/assessments/:id/attempts`, `/api/company/assessment-attempts/:id` | Review attempts for an owned assessment |
 | PUT | `/api/company/assessment-attempts/:id/evaluation` | Record a manual assessment score and feedback |
 | GET | `/api/company/talent`, `/api/company/talent/:id` | Search profiles and inspect skill overlaps/projects |
@@ -300,7 +300,7 @@ Protected endpoints require a valid session cookie. The backend derives company 
 
 SQLite is created automatically at the configured database path. By default, the database is stored at `server/data/osf.sqlite`. The database directory and SQLite files are excluded from Git.
 
-The server applies additive, versioned schema migrations for company authentication and the student/platform modules. Do not delete the SQLite database to apply code changes if it contains registrations or user accounts. Back up the database before making manual schema or data changes.
+The server applies additive, versioned schema migrations for company authentication and the student/platform modules. Migration 3 allows a submission row to hold uploaded draft files before final submission. Do not delete the SQLite database to apply code changes if it contains registrations or user accounts. Back up the database before making manual schema or data changes.
 
 ## Current limitations and production checklist
 

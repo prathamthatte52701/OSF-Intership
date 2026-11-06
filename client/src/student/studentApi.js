@@ -34,6 +34,21 @@ export const studentApi = {
   apply: challengeId => post(`/student/challenges/${encodeURIComponent(challengeId)}/applications`),
   startApplication: id => post(`/student/applications/${encodeURIComponent(id)}/start`),
   submission: id => request(`/student/applications/${encodeURIComponent(id)}/submission`),
+  downloadFile: async id => {
+    const response = await fetch(`/api/student/applications/${encodeURIComponent(id)}/file`, { credentials: 'include' });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const error = new Error(payload.error || 'The file could not be downloaded.');
+      error.status = response.status;
+      throw error;
+    }
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    const basicName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+    let filename = 'submission-file';
+    try { filename = encodedName ? decodeURIComponent(encodedName) : basicName || filename; } catch { filename = basicName || filename; }
+    return { blob: await response.blob(), filename };
+  },
   uploadFile: async (applicationId, file) => {
     const types = { '.pdf': 'application/pdf', '.txt': 'text/plain', '.zip': 'application/zip', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
     const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
@@ -49,5 +64,6 @@ export const studentApi = {
   attempts: () => request('/student/assessment-attempts'),
   attempt: id => request(`/student/assessment-attempts/${encodeURIComponent(id)}`),
   startAttempt: assessmentId => post(`/student/assessments/${encodeURIComponent(assessmentId)}/attempts`),
-  submitAnswers: (attemptId, answers) => put(`/student/assessment-attempts/${encodeURIComponent(attemptId)}/answers`, { answers }),
+  saveAnswers: (attemptId, answers) => put(`/student/assessment-attempts/${encodeURIComponent(attemptId)}/answers`, { answers, finalize: false }),
+  submitAnswers: (attemptId, answers) => put(`/student/assessment-attempts/${encodeURIComponent(attemptId)}/answers`, { answers, finalize: true }),
 };

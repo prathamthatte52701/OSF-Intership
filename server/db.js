@@ -96,3 +96,6 @@ applyMigration(1, () => {
 
 const platformSchema = readFileSync(new URL('./migrations/002_platform_foundation.sql', import.meta.url), 'utf8');
 applyMigration(2, () => db.exec(platformSchema));
+
+const submissionDraftMigration = readFileSync(new URL('./migrations/003_submission_drafts.sql', import.meta.url), 'utf8');
+applyMigration(3, () => db.exec(submissionDraftMigration));

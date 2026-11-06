@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { randomBytes } from 'node:crypto';
 import { db } from './db.js';
-import { createPlatformRouter } from './platform.js';
+import { createPlatformRouter, expireAssessmentAttempts } from './platform.js';
 import { sendOtpEmail, sendPasswordChangedEmail, sendSetupEmail } from './mail.js';
 import { hashOtp, hashPassword, newId, newOtp, newSecret, newUserId, otpMatches, sha256, validatePassword, verifyPassword } from './security.js';
 import { InputError, validateCompanyProfile, validateRegistration } from './validation.js';
@@ -274,6 +274,13 @@ app.post('/api/auth/change-password', requireAuth, asyncRoute(async (req, res) =
 }));
 
 app.use('/api', createPlatformRouter({ db, requireCompanyAuth: requireAuth }));
+
+if (process.env.NODE_ENV !== 'test') {
+  const assessmentExpirySweep = setInterval(() => {
+    try { expireAssessmentAttempts(db); } catch { /* The next sweep retries without changing attempt data. */ }
+  }, 15_000);
+  assessmentExpirySweep.unref();
+}
 
 app.use((error, _req, res, _next) => {
   const status = Number(error.status) || (error.code === 'SQLITE_CONSTRAINT_UNIQUE' ? 409 : 500);
