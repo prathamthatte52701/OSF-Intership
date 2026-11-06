@@ -36,7 +36,7 @@
 }
 
 .challenge-filter-tab.active {
-  background: var(--color-primary, #2563eb);
+  background: var(--osf-blue);
   color: #fff;
   border-color: transparent;
 }
@@ -87,7 +87,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--bg-muted, #f1f5f9);
+  background: var(--bg-surface-sunken);
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 12px;
@@ -115,7 +115,7 @@
 }
 
 .challenge-row-error {
-  color: var(--color-error, #dc2626);
+  color: var(--color-danger);
   font-size: 12px;
   margin-top: 4px;
 }
@@ -178,7 +178,7 @@
 }
 
 .field-error {
-  color: var(--color-error, #dc2626);
+  color: var(--color-danger);
 }
 
 /* ==========================================================================

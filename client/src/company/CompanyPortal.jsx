@@ -156,10 +156,11 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
             <button className="contact-nav-link" onClick={() => go('/contact')}>
               Contact Us
             </button>
-            <button className="btn btn-outline btn-sm" onClick={logout}>
-              <Icon name="LogOut" size={15} />
-              <span>Sign Out</span>
-            </button>
+            {path === '/dashboard/challenges' && (
+              <button className="btn btn-primary btn-sm" onClick={() => go('/dashboard/challenges/new')}>
+                New challenge
+              </button>
+            )}
           </div>
         </header>
 
