@@ -155,6 +155,9 @@ function requireApplicationSubmissionState(db, applicationId, studentId) {
   if (!['IN_PROGRESS', 'SUBMITTED'].includes(application.status)) {
     throw new InputError('Start your task before uploading or submitting work.', 409);
   }
+  if (db.prepare('SELECT 1 FROM evaluations WHERE application_id=?').get(application.id)) {
+    throw new InputError('This application has already been evaluated and can no longer be changed.', 400);
+  }
   return application;
 }
 function fileMetadata(db, applicationId, fileId) {
@@ -188,7 +191,7 @@ function sendSubmissionFile(res, file) {
   const path = resolve(uploadDir, file.storage_key);
   if (dirname(path) !== uploadDir) throw new InputError('Submission file not found.', 404);
   if (!existsSync(path)) throw new InputError('Submission file not found.', 404);
-  res.type(file.mime_type).download(path, basename(file.original_name), error => {
+  res.type(file.mime_type).download(path, basename(file.original_name), { dotfiles: 'allow' }, error => {
     if (error && !res.headersSent) res.status(error.code === 'ENOENT' ? 404 : 500).json({ error: error.code === 'ENOENT' ? 'Submission file not found.' : 'The file could not be downloaded.' });
   });
 }
@@ -210,6 +213,7 @@ function validateChallenge(input, current = null) {
   const taskDescription = requiredText(input.taskDescription ?? current?.task_description, 'Task description', 12000);
   const skillInput = input.requiredSkills ?? current?.requiredSkills ?? [];
   const requiredSkills = parseSkills(skillInput);
+  if (!requiredSkills.length) throw new InputError('Add at least one required skill.');
   const opensAt = toIsoDate(input.applicationOpensAt ?? current?.application_opens_at, 'Application opening date');
   const closesAt = toIsoDate(input.applicationClosesAt ?? current?.application_closes_at, 'Application closing date');
   if (Date.parse(closesAt) < Date.parse(opensAt)) throw new InputError('Application closing date must be after the opening date.');
@@ -483,14 +487,17 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   // Students can see published challenges and apply only during the public window.
   router.get('/challenges', (req, res) => {
     const skills = typeof req.query.skills === 'string' ? req.query.skills.split(',').map(value => text(value, 60)).filter(Boolean).slice(0, 20) : [];
-    const clauses = ["c.status='PUBLISHED'"];
-    const params = [];
+    const clauses = ["c.status='PUBLISHED'", 'c.application_opens_at<=?', 'c.application_closes_at>=?'];
+    const nowStamp = nowIso();
+    const params = [nowStamp, nowStamp];
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 100);
+    const offset = Math.max(Number.parseInt(req.query.offset, 10) || 0, 0);
     if (skills.length) {
       clauses.push(`EXISTS (SELECT 1 FROM challenge_skills cs WHERE cs.challenge_id=c.id AND cs.skill IN (${skills.map(() => '?').join(',')} COLLATE NOCASE))`);
       params.push(...skills);
     }
     const rows = db.prepare(`SELECT c.*,co.company_name AS company_name FROM challenges c
-      JOIN companies co ON co.id=c.company_id WHERE ${clauses.join(' AND ')} ORDER BY c.application_closes_at ASC LIMIT 100`).all(...params);
+      JOIN companies co ON co.id=c.company_id WHERE ${clauses.join(' AND ')} ORDER BY c.application_closes_at ASC LIMIT ? OFFSET ?`).all(...params, limit, offset);
     res.json({ challenges: rows.map(row => challengeView(db, row)) });
   });
   router.get('/challenges/:id', (req, res) => {
@@ -565,6 +572,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
   router.put('/company/challenges/:id', companyAuth, (req, res) => {
     const existing = ownedChallenge(db, req.params.id, req.session.company_id);
+    if (existing.status !== 'DRAFT') throw new InputError('Only draft challenges can be edited.', 409);
     const challenge = validateChallenge(req.body || {}, { ...existing, requiredSkills: challengeSkills(db, existing.id) });
     const timestamp = nowIso();
     const save = db.transaction(() => {
@@ -643,6 +651,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     const filePath = resolve(uploadDir, storageKey);
     await writeFile(filePath, req.body, { flag: 'wx', mode: 0o600 });
     const id = newId(); const timestamp = nowIso();
+    let replaced = [];
     try {
       const saveFile = db.transaction(() => {
         const current = syncExpiredApplication(db, assertApplicationOwner(db, application.id, req.student.student_id));
@@ -655,6 +664,9 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
         db.prepare(`INSERT INTO submissions(id,application_id,file_reference,created_at,updated_at) VALUES (?,?,?,?,?)
           ON CONFLICT(application_id) DO UPDATE SET file_reference=excluded.file_reference,updated_at=excluded.updated_at`)
           .run(newId(), application.id, id, timestamp, timestamp);
+        // Replacing a file removes every older row for this application; disk files are unlinked after commit.
+        replaced = db.prepare('SELECT id,storage_key FROM submission_files WHERE application_id=? AND id<>?').all(application.id, id);
+        db.prepare('DELETE FROM submission_files WHERE application_id=? AND id<>?').run(application.id, id);
         return true;
       });
       if (!saveFile()) {
@@ -665,8 +677,23 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
       await unlink(filePath).catch(() => {});
       throw error;
     }
+    for (const old of replaced) await unlink(resolve(uploadDir, old.storage_key)).catch(() => {});
     res.status(201).json({ file: { id, name: originalName, mimeType, sizeBytes: req.body.length } });
   }));
+  router.put('/student/applications/:id/draft', studentAuth, (req, res) => {
+    const application = requireApplicationSubmissionState(db, req.params.id, req.student.student_id);
+    const body = req.body || {};
+    const githubUrl = optionalUrl(body.githubUrl, 'GitHub repository URL');
+    const deployedUrl = optionalUrl(body.deployedUrl, 'Deployed website URL');
+    const supportingInformation = optionalText(body.supportingInformation, 'Supporting information', 5000);
+    const timestamp = nowIso();
+    const saved = db.prepare(`INSERT INTO submissions(id,application_id,github_url,deployed_url,supporting_information,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?) ON CONFLICT(application_id) DO UPDATE SET github_url=excluded.github_url,deployed_url=excluded.deployed_url,
+      supporting_information=excluded.supporting_information,updated_at=excluded.updated_at WHERE submissions.submitted_at IS NULL`)
+      .run(newId(), application.id, githubUrl, deployedUrl, supportingInformation, timestamp, timestamp);
+    if (!saved.changes) throw new InputError('This task has already been submitted; drafts are no longer saved.', 409);
+    res.json({ draft: { savedAt: timestamp } });
+  });
   router.put('/student/applications/:id/submission', studentAuth, (req, res) => {
     const application = requireApplicationSubmissionState(db, req.params.id, req.student.student_id);
     const body = req.body || {};
@@ -823,7 +850,6 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
         SELECT 1 FROM skill_assessment_attempts a WHERE a.assessment_id=skill_assessments.id AND a.student_id=?
       ))`).get(req.params.id, req.student.student_id);
     if (!assessment) throw new InputError('Assessment not found.', 404);
-    assessment.questions = studentQuestions(db, assessment.id);
     res.json({ assessment });
   });
   router.post('/student/assessments/:id/attempts', studentAuth, (req, res) => {

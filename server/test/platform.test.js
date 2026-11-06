@@ -138,9 +138,7 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal((await request(`/api/student/applications/${application.id}/start`, { method: 'POST', cookie: studentCookie, body: {} })).body.application.individualDeadline, application.individualDeadline);
   assert.equal((await request(`/api/company/challenges/${challengeId}/applications`, { cookie: otherCompany.cookie })).status, 404);
   assert.equal((await request(`/api/company/applications/${application.id}`, { cookie: otherCompany.cookie })).status, 404);
-  const changedChallenge = await request(`/api/company/challenges/${challengeId}`, { method: 'PUT', cookie: company.cookie, body: { individualTaskDurationDays: 5 } });
-  assert.equal(changedChallenge.status, 200);
-  assert.equal(changedChallenge.body.challenge.individualTaskDurationDays, 5);
+  assert.equal((await request(`/api/company/challenges/${challengeId}`, { method: 'PUT', cookie: company.cookie, body: { individualTaskDurationDays: 5 } })).status, 409);
   assert.equal(db.prepare('SELECT individual_deadline FROM applications WHERE id=?').get(application.id).individual_deadline, application.individualDeadline);
   assert.equal((await request(`/api/company/challenges/${challengeId}/close`, { method: 'POST', cookie: company.cookie })).status, 200);
   assert.equal((await request('/api/challenges')).body.challenges.length, 0);
