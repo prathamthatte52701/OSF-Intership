@@ -99,7 +99,7 @@ export default function StudentPortal({ path, go }) {
             {menu.map(item => <button key={item.path} className={`student-nav-item ${activeLabel === item.label ? 'is-active' : ''}`} onClick={() => go(item.path)}><StudentIcon name={item.icon} /><span>{item.label}</span></button>)}
           </nav>
           <div className="student-sidebar-bottom">
-            <div className="student-account-badge"><span className="student-avatar">{(profile?.fullName || session.email || 'S').charAt(0).toUpperCase()}</span><span className="student-account-copy"><strong>{profile?.fullName || 'Student account'}</strong><small>{session.email}</small></span></div>
+            <button className="student-account-badge" aria-label="Open my profile" onClick={() => go('/student/profile')}><span className="student-avatar">{(profile?.fullName || session.email || 'S').charAt(0).toUpperCase()}</span><span className="student-account-copy"><strong>{profile?.fullName || 'Student account'}</strong><small>{session.email}</small></span><StudentIcon name="chevron" size={16} /></button>
             <button className="student-signout" onClick={logout}><StudentIcon name="logout" size={17} /> Sign out</button>
           </div>
         </aside>
