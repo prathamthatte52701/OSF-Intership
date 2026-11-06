@@ -131,8 +131,44 @@ export default function CompanyProfile({ profile, onSaved, readOnly = false }) {
     }
   }
 
+  const Field = ({ id, label, required, hint, error, wide, children }) => (
+    <div className={`cp-field${wide ? ' cp-span-2' : ''}`}>
+      <label htmlFor={id}>{label}{required && <> <span className="required-star" aria-hidden="true">*</span></>}</label>
+      {children}
+      {hint && <small>{hint}</small>}
+      {error && <span className="cp-field-error">{error}</span>}
+    </div>
+  );
+  const View = ({ label, wide, children }) => (
+    <div className={`cp-view-row${wide ? ' cp-span-2' : ''}`}>
+      <span>{label}</span>
+      <p>{children}</p>
+    </div>
+  );
+  const address = [profile?.address1, profile?.address2].filter(Boolean).join(', ') || '—';
+
   return (
-    <div className="profile-container">
+    <div className="cp-profile">
+      <div className="cp-page-header">
+        <div>
+          <h2>{editing ? 'Edit Company Profile' : 'Company Profile'}</h2>
+          <p>{editing ? 'Update your registered enterprise details' : 'Official enterprise registration records on OSF'}</p>
+        </div>
+        {editing ? (
+          <div className="cp-button-row">
+            <button className="btn btn-outline" disabled={saving} onClick={cancel}>Cancel</button>
+            <button className="btn btn-primary" disabled={saving} onClick={save}>
+              {saving ? (<><span className="loading-spinner" /><span>Saving Changes…</span></>) : 'Save'}
+            </button>
+          </div>
+        ) : canEdit && (
+          <button className="btn btn-primary" onClick={() => setEditing(true)}>
+            <Icon name="Edit3" size={14} />
+            <span>Edit</span>
+          </button>
+        )}
+      </div>
+
       {feedback.text && (
         <div className={`alert alert-${feedback.type}`} role="status">
           {feedback.type === 'success' ? <Icon name="CheckCircle2" size={18} /> : <Icon name="AlertCircle" size={18} />}
@@ -148,88 +184,24 @@ export default function CompanyProfile({ profile, onSaved, readOnly = false }) {
       )}
 
       {editing ? (
-        /* Edit Mode */
-        <div className="dash-card profile-edit-card" aria-busy={saving}>
-          <div className="dash-card-header">
-            <div>
-              <h3>Edit Company Profile</h3>
-              <p>Update your registered enterprise details</p>
-            </div>
-            <span className="status-pill warning">Editing</span>
-          </div>
-
-          <div className="field-grid">
-            <div className="field col-span-2">
-              <label className="field-label" htmlFor="edit-company">
-                Company Name <span className="required-star">*</span>
-              </label>
-              <input
-                id="edit-company"
-                value={form.company}
-                maxLength={150}
-                placeholder="e.g. Northstar Technologies Pvt Ltd"
-                onChange={e => update('company', e.target.value)}
-              />
-              {errors.company && <span className="field-error">{errors.company}</span>}
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="edit-pan">
-                Company PAN ID
-              </label>
-              <input
-                id="edit-pan"
-                value={form.pan}
-                maxLength={10}
-                placeholder="ABCDE1234F"
-                onChange={e => update('pan', e.target.value.toUpperCase())}
-              />
-              <span className="field-hint">Optional · 10-character Indian PAN</span>
-              {errors.pan && <span className="field-error">{errors.pan}</span>}
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="edit-msme">
-                MSME Registration
-              </label>
-              <input
-                id="edit-msme"
-                value={form.msme}
-                placeholder="e.g. UDYAM-XX-00-0000000"
-                onChange={e => update('msme', e.target.value.toUpperCase())}
-              />
-              <span className="field-hint">Optional</span>
-            </div>
-
-            <div className="field col-span-2">
-              <label className="field-label" htmlFor="edit-address1">
-                Registered Address Line 1 <span className="required-star">*</span>
-              </label>
-              <input
-                id="edit-address1"
-                value={form.address1}
-                placeholder="Street address, building name, suite"
-                onChange={e => update('address1', e.target.value)}
-              />
-              {errors.address1 && <span className="field-error">{errors.address1}</span>}
-            </div>
-
-            <div className="field col-span-2">
-              <label className="field-label" htmlFor="edit-address2">
-                Address Line 2
-              </label>
-              <input
-                id="edit-address2"
-                value={form.address2}
-                placeholder="Floor, landmark, area (optional)"
-                onChange={e => update('address2', e.target.value)}
-              />
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="edit-state">
-                State / Union Territory <span className="required-star">*</span>
-              </label>
+        <div className="cp-card" aria-busy={saving}>
+          <div className="cp-form-cols">
+            <Field id="edit-company" label="Company Name" required wide error={errors.company}>
+              <input id="edit-company" value={form.company} maxLength={150} placeholder="e.g. Northstar Technologies Pvt Ltd" onChange={e => update('company', e.target.value)} />
+            </Field>
+            <Field id="edit-pan" label="Company PAN ID" hint="Optional · 10-character Indian PAN" error={errors.pan}>
+              <input id="edit-pan" value={form.pan} maxLength={10} placeholder="ABCDE1234F" onChange={e => update('pan', e.target.value.toUpperCase())} />
+            </Field>
+            <Field id="edit-msme" label="MSME Registration" hint="Optional">
+              <input id="edit-msme" value={form.msme} placeholder="e.g. UDYAM-XX-00-0000000" onChange={e => update('msme', e.target.value.toUpperCase())} />
+            </Field>
+            <Field id="edit-address1" label="Registered Address Line 1" required wide error={errors.address1}>
+              <input id="edit-address1" value={form.address1} placeholder="Street address, building name, suite" onChange={e => update('address1', e.target.value)} />
+            </Field>
+            <Field id="edit-address2" label="Address Line 2" wide>
+              <input id="edit-address2" value={form.address2} placeholder="Floor, landmark, area (optional)" onChange={e => update('address2', e.target.value)} />
+            </Field>
+            <Field id="edit-state" label="State / Union Territory" required error={errors.state}>
               <select
                 id="edit-state"
                 value={form.state}
@@ -243,217 +215,93 @@ export default function CompanyProfile({ profile, onSaved, readOnly = false }) {
                   <option key={s.isoCode} value={s.name}>{s.name}</option>
                 ))}
               </select>
-              {errors.state && <span className="field-error">{errors.state}</span>}
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="edit-city">
-                City <span className="required-star">*</span>
-              </label>
-              <select
-                id="edit-city"
-                value={form.city}
-                disabled={!form.state || citiesLoading}
-                onChange={e => update('city', e.target.value)}
-              >
+            </Field>
+            <Field id="edit-city" label="City" required error={errors.city}>
+              <select id="edit-city" value={form.city} disabled={!form.state || citiesLoading} onChange={e => update('city', e.target.value)}>
                 <option value="">{citiesLoading ? 'Loading cities…' : 'Select City'}</option>
                 {cityOptions.map((c, i) => (
                   <option key={`${c}-${i}`} value={c}>{c}</option>
                 ))}
               </select>
-              {errors.city && <span className="field-error">{errors.city}</span>}
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="edit-postal">
-                PIN Code <span className="required-star">*</span>
-              </label>
-              <input
-                id="edit-postal"
-                inputMode="numeric"
-                maxLength={6}
-                value={form.postal}
-                placeholder="6-digit PIN code"
-                onChange={e => update('postal', e.target.value)}
-              />
-              {errors.postal && <span className="field-error">{errors.postal}</span>}
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="edit-country">
-                Country
-              </label>
+            </Field>
+            <Field id="edit-postal" label="PIN Code" required error={errors.postal}>
+              <input id="edit-postal" inputMode="numeric" maxLength={6} value={form.postal} placeholder="6-digit PIN code" onChange={e => update('postal', e.target.value)} />
+            </Field>
+            <Field id="edit-country" label="Country">
               <input id="edit-country" value="India" readOnly aria-readonly="true" />
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="edit-contact">
-                Contact Person Full Name <span className="required-star">*</span>
-              </label>
-              <input
-                id="edit-contact"
-                value={form.contact}
-                placeholder="Full name"
-                onChange={e => update('contact', e.target.value)}
-              />
-              {errors.contact && <span className="field-error">{errors.contact}</span>}
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="edit-phone">
-                Phone Number
-              </label>
+            </Field>
+            <Field id="edit-contact" label="Contact Person Full Name" required error={errors.contact}>
+              <input id="edit-contact" value={form.contact} placeholder="Full name" onChange={e => update('contact', e.target.value)} />
+            </Field>
+            <Field id="edit-phone" label="Phone Number" hint="Optional · Indian phone numbers only" error={errors.phone}>
               <div className="phone-input-group">
                 <span className="phone-prefix">+91</span>
-                <input
-                  id="edit-phone"
-                  type="tel"
-                  inputMode="tel"
-                  value={form.phone}
-                  placeholder="10-digit mobile number"
-                  onChange={e => update('phone', e.target.value)}
-                />
+                <input id="edit-phone" type="tel" inputMode="tel" value={form.phone} placeholder="10-digit mobile number" onChange={e => update('phone', e.target.value)} />
               </div>
-              <span className="field-hint">Optional · Indian phone numbers only</span>
-              {errors.phone && <span className="field-error">{errors.phone}</span>}
-            </div>
+            </Field>
           </div>
 
-          <div className="alert alert-info" style={{ marginTop: '12px' }}>
+          <div className="alert alert-info">
             <Icon name="Lock" size={16} />
             <div>
               <strong>Company Email: {profile.email || '—'}</strong>
-              <div style={{ fontSize: '13.2px', marginTop: '2px', color: 'var(--text-secondary)' }}>
-                Email modification is restricted to preserve account security.
-              </div>
+              <div className="cp-helper">Email modification is restricted to preserve account security.</div>
             </div>
-          </div>
-
-          <div className="form-actions">
-            <button className="btn btn-outline" disabled={saving} onClick={cancel}>
-              Cancel
-            </button>
-            <button className="btn btn-primary" disabled={saving} onClick={save}>
-              {saving ? (
-                <>
-                  <span className="loading-spinner" />
-                  <span>Saving Changes…</span>
-                </>
-              ) : (
-                'Save Profile Changes'
-              )}
-            </button>
           </div>
         </div>
       ) : (
-        /* Read-Only State */
-        <div className="profile-grid-sections">
-          {/* Header Card with Edit Action */}
-          <div className="dash-card">
-            <div className="dash-card-header" style={{ marginBottom: 0, paddingBottom: 0, borderBottom: 'none' }}>
-              <div>
-                <h3>Company Profile</h3>
-                <p>Official enterprise registration records on OSF</p>
-              </div>
-              {canEdit && (
-                <button className="btn btn-outline btn-sm" onClick={() => setEditing(true)}>
-                  <Icon name="Edit3" size={14} />
-                  <span>Edit Profile</span>
-                </button>
-              )}
+        <div className="cp-profile-stack">
+          <div className="cp-card">
+            <div className="cp-section-head">
+              <h3 className="cp-card-title">Company details</h3>
+              <Icon name="Building2" size={16} />
+            </div>
+            <div className="cp-view-grid">
+              <View label="Legal Company Name">{profile?.company || '—'}</View>
+              <View label="Company PAN ID">{profile?.pan || 'Not provided'}</View>
+              <View label="MSME Registration">{profile?.msme || 'Not provided'}</View>
+              <View label="Country Jurisdiction">India (IN)</View>
             </div>
           </div>
 
-          {/* Section 1: Company Information */}
-          <div className="profile-section-card">
-            <div className="profile-section-card-head">
-              <h3>Company Information</h3>
-              <span className="status-pill success">
-                <Icon name="CheckCircle2" size={12} /> Registered
-              </span>
-            </div>
-            <div className="profile-section-grid">
-              <div className="profile-item">
-                <span className="profile-item-label">Legal Company Name</span>
-                <span className="profile-item-value">{profile?.company || '—'}</span>
-              </div>
-              <div className="profile-item">
-                <span className="profile-item-label">Company PAN ID</span>
-                <span className="profile-item-value">{profile?.pan || 'Not provided'}</span>
-              </div>
-              <div className="profile-item">
-                <span className="profile-item-label">MSME Registration</span>
-                <span className="profile-item-value">{profile?.msme || 'Not provided'}</span>
-              </div>
-              <div className="profile-item">
-                <span className="profile-item-label">Country Jurisdiction</span>
-                <span className="profile-item-value">India (IN)</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Registered Business Address */}
-          <div className="profile-section-card">
-            <div className="profile-section-card-head">
-              <h3>Registered Business Address</h3>
-              <Icon name="MapPin" size={16} />
-            </div>
-            <div className="profile-section-grid">
-              <div className="profile-item" style={{ gridColumn: 'span 2' }}>
-                <span className="profile-item-label">Address</span>
-                <span className="profile-item-value">
-                  {[profile?.address1, profile?.address2].filter(Boolean).join(', ') || '—'}
-                </span>
-              </div>
-              <div className="profile-item">
-                <span className="profile-item-label">State / Union Territory</span>
-                <span className="profile-item-value">{profile?.state || '—'}</span>
-              </div>
-              <div className="profile-item">
-                <span className="profile-item-label">City</span>
-                <span className="profile-item-value">{profile?.city || '—'}</span>
-              </div>
-              <div className="profile-item">
-                <span className="profile-item-label">PIN Code</span>
-                <span className="profile-item-value">{profile?.postal || '—'}</span>
-              </div>
-              <div className="profile-item">
-                <span className="profile-item-label">Country</span>
-                <span className="profile-item-value">{profile?.country || 'India'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: Contact & Sign-in Representative */}
-          <div className="profile-section-card">
-            <div className="profile-section-card-head">
-              <h3>Contact & Representative</h3>
+          <div className="cp-card">
+            <div className="cp-section-head">
+              <h3 className="cp-card-title">Contact</h3>
               <Icon name="UserRound" size={16} />
             </div>
-            <div className="profile-section-grid">
-              <div className="profile-item">
-                <span className="profile-item-label">Contact Person Name</span>
-                <span className="profile-item-value">{profile?.contact || '—'}</span>
-              </div>
-              <div className="profile-item">
-                <span className="profile-item-label">Email Verification</span>
-                <span className="profile-item-value">
-                  {profile?.email || '—'}
-                  {profile?.emailVerified ? (
-                    <span className="verified-email-badge">
-                      <Icon name="CheckCircle2" size={11} /> Email Verified
-                    </span>
-                  ) : <span className="profile-item-label">Email Not Verified</span>}
+            <div className="cp-view-grid">
+              <View label="Contact Person Name">{profile?.contact || '—'}</View>
+              <View label="Phone Number">{profile?.phone || 'Not provided'}</View>
+              <View label="Email" wide>{profile?.email || '—'}</View>
+            </div>
+          </div>
+
+          <div className="cp-card">
+            <div className="cp-section-head">
+              <h3 className="cp-card-title">Registered address</h3>
+              <Icon name="MapPin" size={16} />
+            </div>
+            <div className="cp-view-grid">
+              <View label="Address" wide>{address}</View>
+              <View label="State / Union Territory">{profile?.state || '—'}</View>
+              <View label="City">{profile?.city || '—'}</View>
+              <View label="PIN Code">{profile?.postal || '—'}</View>
+              <View label="Country">{profile?.country || 'India'}</View>
+            </div>
+          </div>
+
+          <div className="cp-card">
+            <div className="cp-section-head">
+              <h3 className="cp-card-title">Verification</h3>
+              <Icon name="ShieldCheck" size={16} />
+            </div>
+            <div className="cp-view-grid">
+              <View label="Email verification">
+                <span className={`status-pill ${profile?.emailVerified ? 'success' : 'warning'}`}>
+                  {profile?.emailVerified ? 'Email verified' : 'Email not verified'}
                 </span>
-              </div>
-              <div className="profile-item">
-                <span className="profile-item-label">Phone Number</span>
-                <span className="profile-item-value">{profile?.phone || 'Not provided'}</span>
-              </div>
-              <div className="profile-item">
-                <span className="profile-item-label">Company Verification</span>
-                <span className="profile-item-value">Not available</span>
-              </div>
+              </View>
+              <View label="Company verification">Not available</View>
             </div>
           </div>
         </div>
