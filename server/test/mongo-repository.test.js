@@ -48,7 +48,10 @@ test('mongo challenges repository: draft lifecycle, edit lock, open-window publi
   const conn = await connectMongo({ uri, dbName: `osf_test_${randomBytes(6).toString('hex')}` });
   try {
     const { challenges } = await createMongoRepositories(conn);
-    await conn.db.collection('companies').insertMany([{ _id: 'co1', company_name: 'Acme' }, { _id: 'co2', company_name: 'Other' }]);
+    await conn.db.collection('companies').insertMany([
+      { _id: 'co1', company_name: 'Acme', email: 'co1@example.test' },
+      { _id: 'co2', company_name: 'Other', email: 'co2@example.test' },
+    ]);
     const day = 86400000, now = Date.now(), iso = ms => new Date(ms).toISOString();
     const mk = (title, skills = ['Node']) => ({ roleTitle: title, taskDescription: 'd', requiredSkills: skills, reference: null, language: null, extraInformation: null, isPaid: 0,
       compensationDetails: null, candidateCount: null, applicationOpensAt: iso(now - day), applicationClosesAt: iso(now + day), individualTaskDurationDays: 7 });
