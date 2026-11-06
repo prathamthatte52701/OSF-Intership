@@ -61,6 +61,17 @@ function fmtShort(date) {
   return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(date);
 }
 
+function fmtFull(iso) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}
+
+function statusPillClass(status) {
+  return status === 'PUBLISHED' ? 'success' : 'neutral';
+}
+
 function emptyForm() {
   return {
     roleTitle: '', taskDescription: '', requiredSkills: [], reference: '', language: '',
@@ -364,11 +375,65 @@ export default function ChallengeFormPage({ go, challengeId }) {
         <div className="cp-page-header">
           <div>
             <h3>{challenge.roleTitle}</h3>
-            <span className={`status-pill ${challenge.status === 'PUBLISHED' ? 'success' : 'warning'}`}>{challenge.status}</span>
+            <p>{challenge.status === 'PUBLISHED' ? 'Visible to students. Editing is locked once a challenge is published.' : 'This challenge is closed and no longer accepting applications.'}</p>
           </div>
+          <span className={`status-pill ${statusPillClass(challenge.status)}`}>{challenge.status}</span>
         </div>
-        <p>Published and closed challenges can't be edited here.</p>
-        <button className="btn btn-outline btn-sm" onClick={() => go('/dashboard/challenges')}>Back</button>
+
+        <div className="cp-view-rows">
+          <div className="cp-view-row">
+            <span>Task description</span>
+            <p>{challenge.taskDescription}</p>
+          </div>
+          {challenge.requiredSkills?.length > 0 && (
+            <div className="cp-view-row">
+              <span>Required skills</span>
+              <div className="cp-chip-input" style={{ border: 'none', padding: 0 }}>
+                {challenge.requiredSkills.map(skill => <span key={skill} className="chip">{skill}</span>)}
+              </div>
+            </div>
+          )}
+          <div className="cp-view-row">
+            <span>Application window</span>
+            <p className="tabular-nums">{fmtFull(challenge.applicationOpensAt)} → {fmtFull(challenge.applicationClosesAt)}</p>
+          </div>
+          <div className="cp-view-row">
+            <span>Task duration</span>
+            <p className="tabular-nums">{challenge.individualTaskDurationDays} day{challenge.individualTaskDurationDays === 1 ? '' : 's'} per student, from the moment they apply</p>
+          </div>
+          <div className="cp-view-row">
+            <span>Candidates needed</span>
+            <p className="tabular-nums">{challenge.candidateCount == null ? 'No limit' : challenge.candidateCount}</p>
+          </div>
+          <div className="cp-view-row">
+            <span>Applicants so far</span>
+            <p className="tabular-nums">{challenge.applicationCount ?? 0}</p>
+          </div>
+          <div className="cp-view-row">
+            <span>Compensation</span>
+            <p>{challenge.isPaid ? (challenge.compensationDetails || 'Paid — no further details given') : 'Unpaid'}</p>
+          </div>
+          {challenge.reference && (
+            <div className="cp-view-row">
+              <span>Reference</span>
+              <p>{challenge.reference}</p>
+            </div>
+          )}
+          {challenge.language && (
+            <div className="cp-view-row">
+              <span>Language</span>
+              <p>{challenge.language}</p>
+            </div>
+          )}
+          {challenge.extraInformation && (
+            <div className="cp-view-row">
+              <span>Extra information</span>
+              <p>{challenge.extraInformation}</p>
+            </div>
+          )}
+        </div>
+
+        <button className="btn btn-outline btn-sm" onClick={() => go('/dashboard/challenges')} style={{ marginTop: '20px' }}>Back to Live Challenge</button>
       </div>
     );
   }

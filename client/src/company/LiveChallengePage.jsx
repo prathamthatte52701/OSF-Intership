@@ -234,18 +234,24 @@ function ChallengeMeta({ challenge }) {
 }
 
 function RowActions({ challenge, busy, go, onPublish, onClose }) {
+  const viewPath = `/dashboard/challenges/${encodeURIComponent(challenge.id)}/edit`;
   if (challenge.status === 'DRAFT') {
     return (
       <>
-        <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => go(`/dashboard/challenges/${encodeURIComponent(challenge.id)}/edit`)}>Edit</button>
+        <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => go(viewPath)}>Edit</button>
         <button className="btn btn-outline btn-sm" disabled={busy} onClick={onPublish}>Publish</button>
       </>
     );
   }
   if (challenge.status === 'PUBLISHED') {
-    return <button className="btn btn-outline btn-sm" disabled={busy} onClick={onClose}>Close</button>;
+    return (
+      <>
+        <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => go(viewPath)}>View</button>
+        <button className="btn btn-outline btn-sm" disabled={busy} onClick={onClose}>Close</button>
+      </>
+    );
   }
-  return <span className="data-table-value">No actions</span>;
+  return <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => go(viewPath)}>View</button>;
 }
 
 function statusPillClass(status) {
