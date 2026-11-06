@@ -256,6 +256,15 @@ function statusPillClass(status) {
   return 'neutral';
 }
 
+function ApplicantsLink({ challenge, go }) {
+  return (
+    <a href={`/dashboard/challenges/${encodeURIComponent(challenge.id)}/applicants`}
+      onClick={e => { e.preventDefault(); go(`/dashboard/challenges/${encodeURIComponent(challenge.id)}/applicants`); }}>
+      Applicants ({challenge.applicationCount ?? 0})
+    </a>
+  );
+}
+
 function ChallengeRow({ challenge, busy, error, go, onPublish, onClose }) {
   return (
     <tr>
@@ -265,7 +274,7 @@ function ChallengeRow({ challenge, busy, error, go, onPublish, onClose }) {
       <td className="tabular-nums">{challenge.individualTaskDurationDays}</td>
       <td>{challenge.isPaid ? 'Paid' : 'Unpaid'}</td>
       <td className="challenge-skills-cell">{(challenge.requiredSkills || []).map(skill => <span key={skill} className="chip">{skill}</span>)}</td>
-      <td className="tabular-nums">{challenge.applicationCount ?? 0}</td>
+      <td className="tabular-nums"><ApplicantsLink challenge={challenge} go={go} /></td>
       <td>
         <div className="challenge-row-actions">
           <RowActions challenge={challenge} busy={busy} go={go} onPublish={onPublish} onClose={onClose} />
@@ -289,7 +298,7 @@ function ChallengeCard({ challenge, busy, error, go, onPublish, onClose }) {
       <div className="data-table-rows">
         <div className="data-table-row"><span className="data-table-label">Task days</span><span className="data-table-value tabular-nums">{challenge.individualTaskDurationDays}</span></div>
         <div className="data-table-row"><span className="data-table-label">Compensation</span><span className="data-table-value">{challenge.isPaid ? 'Paid' : 'Unpaid'}</span></div>
-        <div className="data-table-row"><span className="data-table-label">Applicants</span><span className="data-table-value tabular-nums">{challenge.applicationCount ?? 0}</span></div>
+        <div className="data-table-row"><span className="data-table-label">Applicants</span><span className="data-table-value tabular-nums"><ApplicantsLink challenge={challenge} go={go} /></span></div>
       </div>
       <div className="challenge-row-actions">
         <RowActions challenge={challenge} busy={busy} go={go} onPublish={onPublish} onClose={onClose} />
