@@ -758,6 +758,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
   router.put('/company/assessments/:id', companyAuth, (req, res) => {
     const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    if (assessment.status !== 'DRAFT') throw new InputError('Only draft assessments can be edited.', 400);
     const title = requiredText(req.body?.title ?? assessment.title, 'Assessment title', 150);
     const relatedSkill = requiredText(req.body?.relatedSkill ?? assessment.related_skill, 'Related skill', 80);
     const duration = req.body?.durationMinutes === undefined ? assessment.duration_minutes : req.body.durationMinutes === null || req.body.durationMinutes === '' ? null : Number(req.body.durationMinutes);
@@ -976,7 +977,8 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
 function companyAssessment(db, id) {
   const row = db.prepare('SELECT * FROM skill_assessments WHERE id=?').get(id);
   return { id: row.id, title: row.title, description: row.description, relatedSkill: row.related_skill, instructions: row.instructions,
-    durationMinutes: row.duration_minutes, status: row.status, questions: db.prepare('SELECT id,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,correct_answer AS correctAnswer,question_order AS questionOrder FROM skill_assessment_questions WHERE assessment_id=? ORDER BY question_order').all(id) };
+    durationMinutes: row.duration_minutes, status: row.status, createdAt: row.created_at,
+    attemptCount: db.prepare('SELECT COUNT(*) AS n FROM skill_assessment_attempts WHERE assessment_id=?').get(id).n, questions: db.prepare('SELECT id,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,correct_answer AS correctAnswer,question_order AS questionOrder FROM skill_assessment_questions WHERE assessment_id=? ORDER BY question_order').all(id) };
 }
 function companyQuestion(db, id) {
   return db.prepare('SELECT id,assessment_id AS assessmentId,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,correct_answer AS correctAnswer,question_order AS questionOrder FROM skill_assessment_questions WHERE id=?').get(id);

@@ -224,6 +224,9 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal(companyAttempt.body.attempt.questions[0].correctAnswer, 'B');
   assert.equal((await request(`/api/company/assessment-attempts/${attemptId}`, { cookie: otherCompany.cookie })).status, 404);
   assert.equal((await request(`/api/company/assessment-attempts/${attemptId}/evaluation`, { method: 'PUT', cookie: company.cookie, body: { manualScore: 80, companyFeedback: 'Manual review.' } })).status, 200);
+  // T11: published assessments are locked against edits (timer/questions must not change under live attempts).
+  assert.equal((await request(`/api/company/assessments/${assessmentId}`, { method: 'PUT', cookie: company.cookie, body: { title: 'Changed', durationMinutes: 5 } })).status, 400);
+  assert.equal((await request('/api/company/assessments', { cookie: company.cookie })).body.assessments.find(a => a.id === assessmentId).durationMinutes, 30);
   assert.equal((await request(`/api/company/assessments/${assessmentId}/close`, { method: 'POST', cookie: company.cookie })).status, 200);
   assert.equal((await request('/api/student/assessments', { cookie: studentCookie })).body.assessments.some(item => item.id === assessmentId), false);
   const closedAssessment = await request(`/api/student/assessments/${assessmentId}`, { cookie: studentCookie });
