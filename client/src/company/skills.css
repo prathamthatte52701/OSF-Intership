@@ -1,0 +1,21 @@
+/* Skill verification (cp- naming, existing tokens only) */
+.cp-skill-list { display: flex; flex-direction: column; gap: 16px; }
+.cp-skill-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.cp-skill-title { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+.cp-skill-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; color: var(--text-secondary); font-size: 13px; }
+.cp-muted { color: var(--text-secondary); font-size: 13px; }
+.cp-question-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+.cp-question-item { padding: 16px; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-surface); }
+.cp-question-text { margin: 0 0 12px; font-size: 15px; font-weight: 600; white-space: pre-wrap; }
+.cp-option-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; font-size: 15px; }
+.cp-option-list li { padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); }
+.cp-option-list li.correct { background: var(--color-success-bg); border-color: var(--color-success-border); color: var(--color-success); }
+.cp-option-list li.wrong { background: var(--color-danger-bg); border-color: var(--color-danger-border); color: var(--color-danger); }
+.cp-options { border: none; margin: 0 0 16px; padding: 0; display: grid; gap: 8px; }
+.cp-options legend { padding: 0; margin-bottom: 8px; color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+.cp-option-row { display: flex; align-items: center; gap: 12px; }
+.cp-option-row input[type="text"] { flex: 1; min-height: 42px; padding: 8px 12px; font-size: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-surface); color: var(--text-primary); }
+.cp-option-row input[type="radio"] { width: 18px; height: 18px; }
+.cp-question-editor { margin-top: 16px; }
+.cp-publish-helper { margin-right: auto; align-self: center; color: var(--text-secondary); font-size: 13px; }
+.cp-field > input:focus-visible, .cp-option-row input:focus-visible { outline: 2px solid var(--border-color-focus); outline-offset: 2px; }

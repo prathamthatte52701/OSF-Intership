@@ -2,6 +2,9 @@ import React from 'react';
 import CompanyProfile from '../CompanyProfile.jsx';
 import LiveChallengePage from './LiveChallengePage.jsx';
 import ChallengeFormPage from './ChallengeFormPage.jsx';
+import SkillVerificationPage from './SkillVerificationPage.jsx';
+import AssessmentFormPage from './AssessmentFormPage.jsx';
+import { AttemptsList, AttemptDetail } from './AssessmentAttemptsPage.jsx';
 import { companyApi } from './companyApi.js';
 import './company.css';
 
@@ -161,6 +164,11 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
                 New challenge
               </button>
             )}
+            {path === '/dashboard/skills' && (
+              <button className="btn btn-primary btn-sm" onClick={() => go('/dashboard/skills/new')}>
+                New assessment
+              </button>
+            )}
           </div>
         </header>
 
@@ -188,7 +196,11 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
             />
           )}
 
-          {path === '/dashboard/skills' && <EmptyModule title="Skill Verification" />}
+          {path === '/dashboard/skills' && <SkillVerificationPage go={go} />}
+          {path === '/dashboard/skills/new' && <AssessmentFormPage go={go} />}
+          {/^\/dashboard\/skills\/[^/]+\/edit$/.test(path) && <AssessmentFormPage key={path} go={go} assessmentId={decodeURIComponent(path.split('/')[3])} />}
+          {/^\/dashboard\/skills\/[^/]+\/attempts$/.test(path) && <AttemptsList go={go} assessmentId={decodeURIComponent(path.split('/')[3])} />}
+          {/^\/dashboard\/skills\/[^/]+\/attempts\/[^/]+$/.test(path) && <AttemptDetail go={go} assessmentId={decodeURIComponent(path.split('/')[3])} attemptId={decodeURIComponent(path.split('/')[5])} />}
           {path === '/dashboard/talent' && <EmptyModule title="Talent Discovery" />}
 
           {path === '/dashboard/company' && (
