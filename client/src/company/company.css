@@ -129,51 +129,201 @@
   margin-top: 16px;
 }
 
-.challenge-form {
-  max-width: 640px;
+.field-error {
+  color: var(--color-error, #dc2626);
 }
 
-.challenge-form-dates {
+/* ==========================================================================
+   COMPANY-OWNED SHARED PIECES (cp- prefix)
+   Built from the dashboard's own tokens, independent of the student portal.
+   ========================================================================== */
+
+.cp-page-header {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 16px;
-  flex-wrap: wrap;
+  margin-bottom: 20px;
 }
 
-.challenge-form-dates .sp-field {
-  flex: 1;
-  min-width: 220px;
+.cp-page-header h2, .cp-page-header h3 {
+  margin-bottom: 4px;
 }
 
-.challenge-form-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 20px;
-  flex-wrap: wrap;
+.cp-page-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13.8px;
 }
 
-.skill-chip-input {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.cp-card {
+  background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: var(--radius-md);
+  padding: 24px;
+  box-shadow: var(--shadow-xs);
 }
 
-.skill-chip-input input {
-  border: none;
+.cp-card-title {
+  margin-bottom: 16px;
+  font-size: 15.4px;
+}
+
+.cp-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 18px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cp-field > span {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.cp-field > input,
+.cp-field > textarea,
+.cp-field > select {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
   outline: none;
-  flex: 1;
-  min-width: 140px;
-  background: transparent;
 }
 
-.sp-field-checkbox {
+.cp-field > textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.cp-field > input:focus,
+.cp-field > textarea:focus,
+.cp-field > select:focus {
+  border-color: var(--border-color-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--border-color-focus) 15%, transparent);
+}
+
+.cp-field > small {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 450;
+}
+
+.cp-field-error {
+  color: var(--color-danger) !important;
+}
+
+.cp-field-checkbox {
   flex-direction: row;
   align-items: center;
   gap: 8px;
 }
 
-.field-error {
-  color: var(--color-error, #dc2626);
+.cp-chip-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 42px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+}
+
+.cp-chip-input input {
+  border: none;
+  outline: none;
+  flex: 1;
+  min-width: 140px;
+  min-height: auto;
+  padding: 4px;
+  background: transparent;
+}
+
+.cp-button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cp-alert {
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+}
+
+.cp-alert-error {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+}
+
+.cp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cp-table th, .cp-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+}
+
+.cp-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+}
+
+/* Challenge form layout */
+.cp-challenge-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.cp-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.cp-window-summary {
+  margin: -4px 0 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.cp-action-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 14px 0;
+  background-color: var(--bg-page);
+  border-top: 1px solid var(--border-color);
+  z-index: 5;
+}
+
+@media (min-width: 901px) {
+  .cp-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cp-card-basics {
+    grid-column: 1 / -1;
+  }
 }
