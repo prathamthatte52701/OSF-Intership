@@ -931,32 +931,44 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
 
   // Company talent discovery uses indexed stored skills and returns the transparent overlap.
+  // Hidden profiles (profile_visible=0) are only visible to companies whose challenges the student applied to.
+  const VISIBLE_TO_COMPANY = `(s.profile_visible=1 OR EXISTS (SELECT 1 FROM applications a JOIN challenges c ON c.id=a.challenge_id WHERE a.student_id=s.id AND c.company_id=?))`;
   router.get('/company/talent', companyAuth, (req, res) => {
-    const requestedSkills = typeof req.query.skills === 'string' ? req.query.skills.split(',').map(value => text(value, 60)).filter(Boolean).slice(0, 20) : [];
+    const requestedSkills = [...new Map((typeof req.query.skills === 'string' ? req.query.skills.split(',').map(value => text(value, 60)).filter(Boolean).slice(0, 20) : []).map(skill => [skill.toLowerCase(), skill])).values()];
     const college = typeof req.query.college === 'string' ? text(req.query.college, 200) : '';
-    const clauses = [];
-    const params = [];
+    const limit = Math.min(Math.max(Math.trunc(Number(req.query.limit)) || 24, 1), 50);
+    const offset = Math.max(Math.trunc(Number(req.query.offset)) || 0, 0);
+    const companyId = req.session.company_id;
+    const clauses = [VISIBLE_TO_COMPANY];
+    const params = [companyId];
     if (college) { clauses.push('s.college LIKE ? ESCAPE \'\\\' COLLATE NOCASE'); params.push(`%${college.replace(/[\\%_]/g, '\\$&')}%`); }
+    const marks = requestedSkills.map(() => '?').join(',');
     if (requestedSkills.length) {
-      clauses.push(`EXISTS (SELECT 1 FROM student_skills ss WHERE ss.student_id=s.id AND ss.skill IN (${requestedSkills.map(() => '?').join(',')} COLLATE NOCASE))`);
+      clauses.push(`EXISTS (SELECT 1 FROM student_skills ss WHERE ss.student_id=s.id AND ss.skill COLLATE NOCASE IN (${marks}))`);
       params.push(...requestedSkills);
     }
-    const rows = db.prepare(`SELECT s.id FROM students s ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''} ORDER BY s.updated_at DESC LIMIT 100`).all(...params);
+    const where = clauses.join(' AND ');
+    const total = db.prepare(`SELECT COUNT(*) AS n FROM students s WHERE ${where}`).get(...params).n;
+    const matchExpr = requestedSkills.length ? `(SELECT COUNT(DISTINCT lower(ss.skill)) FROM student_skills ss WHERE ss.student_id=s.id AND ss.skill COLLATE NOCASE IN (${marks}))` : '0';
+    // Sort by match count first, then paginate, so LIMIT/OFFSET apply to the ranked list.
+    const rows = db.prepare(`SELECT s.id, ${matchExpr} AS matchCount FROM students s WHERE ${where} ORDER BY matchCount DESC, s.updated_at DESC, s.id LIMIT ? OFFSET ?`)
+      .all(...(requestedSkills.length ? requestedSkills : []), ...params, limit, offset);
     const students = rows.map(row => {
       const profile = studentProfile(db, row.id, { includeResume: true });
       const matchedSkills = requestedSkills.filter(skill => profile.skills.some(known => known.toLowerCase() === skill.toLowerCase()));
-      return { ...profile, matchedSkills, matchCount: matchedSkills.length };
-    }).sort((a, b) => b.matchCount - a.matchCount);
-    res.json({ students, matchBasis: requestedSkills.length ? 'Number of requested skills found on the profile; ties use most recently updated profile.' : 'Most recently updated student profiles.' });
+      return { ...profile, matchedSkills, matchCount: row.matchCount };
+    });
+    res.json({ students, total, limit, offset, matchBasis: requestedSkills.length ? 'Number of requested skills found on the profile; ties use most recently updated profile.' : 'Most recently updated student profiles.' });
   });
   router.get('/company/talent/:id', companyAuth, (req, res) => {
-    const profile = studentProfile(db, req.params.id, { includeResume: true });
+    const visible = db.prepare(`SELECT 1 FROM students s WHERE s.id=? AND ${VISIBLE_TO_COMPANY}`).get(req.params.id, req.session.company_id);
+    const profile = visible && studentProfile(db, req.params.id, { includeResume: true });
     if (!profile) throw new InputError('Student profile not found.', 404);
     res.json({ profile });
   });
   router.get('/company/saved-students', companyAuth, (req, res) => {
-    const rows = db.prepare('SELECT student_id FROM saved_students WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
-    res.json({ students: rows.map(({ student_id: id }) => ({ ...studentProfile(db, id, { includeResume: true }), ...db.prepare('SELECT created_at AS savedAt,note FROM saved_students WHERE company_id=? AND student_id=?').get(req.session.company_id, id) })) });
+    const rows = db.prepare('SELECT student_id,note,created_at FROM saved_students WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
+    res.json({ students: rows.map(row => ({ ...studentProfile(db, row.student_id, { includeResume: true }), note: row.note, savedAt: row.created_at })) });
   });
   router.post('/company/saved-students/:studentId', companyAuth, (req, res) => {
     if (!db.prepare('SELECT 1 FROM students WHERE id=?').get(req.params.studentId)) throw new InputError('Student profile not found.', 404);

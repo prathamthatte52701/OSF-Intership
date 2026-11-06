@@ -1,6 +1,7 @@
 import React from 'react';
 import CompanyProfile from '../CompanyProfile.jsx';
 import LiveChallengePage from './LiveChallengePage.jsx';
+import TalentDiscoveryPage from './TalentDiscoveryPage.jsx';
 import ChallengeFormPage from './ChallengeFormPage.jsx';
 import ChallengeApplicantsPage from './ChallengeApplicantsPage.jsx';
 import ApplicationDetailPage from './ApplicationDetailPage.jsx';
@@ -96,8 +97,9 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
           : `${companyName} · the roles you publish for student applicants`;
       case 'Company Profile':
         return 'Keep your enterprise details current so students see an accurate listing.';
-      case 'Skill Verification':
       case 'Talent Discovery':
+        return 'Find students by skill and college, save the ones worth a conversation.';
+      case 'Skill Verification':
         return 'Coming in the next step of the company portal.';
       default:
         return undefined;
@@ -216,7 +218,7 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
           {/^\/dashboard\/skills\/[^/]+\/edit$/.test(path) && <AssessmentFormPage key={path} go={go} assessmentId={decodeURIComponent(path.split('/')[3])} />}
           {/^\/dashboard\/skills\/[^/]+\/attempts$/.test(path) && <AttemptsList go={go} assessmentId={decodeURIComponent(path.split('/')[3])} />}
           {/^\/dashboard\/skills\/[^/]+\/attempts\/[^/]+$/.test(path) && <AttemptDetail go={go} assessmentId={decodeURIComponent(path.split('/')[3])} attemptId={decodeURIComponent(path.split('/')[5])} />}
-          {path === '/dashboard/talent' && <EmptyModule title="Talent Discovery" />}
+          {path === '/dashboard/talent' && <TalentDiscoveryPage go={go} />}
 
           {path === '/dashboard/company' && (
             <CompanyProfile profile={account?.profile} onSaved={onProfileUpdated} />
