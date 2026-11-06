@@ -9,7 +9,8 @@ export async function createRepositories(driver = process.env.DB_DRIVER || 'sqli
   if (driver === 'sqlite') {
     const { db } = await import('../db.js');
     const { createAuthRepo } = await import('./sqlite/auth.js');
-    return { driver, db, auth: createAuthRepo(db) };
+    const { createChallengesRepo } = await import('./sqlite/challenges.js');
+    return { driver, db, auth: createAuthRepo(db), challenges: createChallengesRepo(db) };
   }
   if (driver === 'mongo') {
     const { connectMongo } = await import('./mongo/connect.js');
