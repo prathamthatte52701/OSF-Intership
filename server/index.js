@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { randomBytes } from 'node:crypto';
 import { db } from './db.js';
+import { createPlatformRouter } from './platform.js';
 import { sendOtpEmail, sendPasswordChangedEmail, sendSetupEmail } from './mail.js';
 import { hashOtp, hashPassword, newId, newOtp, newSecret, newUserId, otpMatches, sha256, validatePassword, verifyPassword } from './security.js';
 import { InputError, validateCompanyProfile, validateRegistration } from './validation.js';
@@ -271,6 +272,8 @@ app.post('/api/auth/change-password', requireAuth, asyncRoute(async (req, res) =
   try { await sendPasswordChangedEmail({ to: company.email, contactName: company.contact_name, changedAt }); } catch { notification = 'failed'; }
   res.json({ changed: true, notification });
 }));
+
+app.use('/api', createPlatformRouter({ db, requireCompanyAuth: requireAuth }));
 
 app.use((error, _req, res, _next) => {
   const status = Number(error.status) || (error.code === 'SQLITE_CONSTRAINT_UNIQUE' ? 409 : 500);

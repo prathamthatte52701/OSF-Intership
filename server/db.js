@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -60,19 +60,39 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
 `);
 
-// Add setup recovery state to databases created by earlier portal versions.
-const userColumns = new Set(db.prepare('PRAGMA table_info(users)').all().map(column => column.name));
-const addUserColumn = (name, definition) => {
-  if (!userColumns.has(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
+// Additive, versioned migrations. The original company schema is bootstrapped above
+// so databases created by earlier app versions can be upgraded without rebuilding.
+db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+  version INTEGER PRIMARY KEY,
+  applied_at TEXT NOT NULL
+)`);
+
+const hasMigration = version => Boolean(db.prepare('SELECT 1 FROM schema_migrations WHERE version=?').get(version));
+const applyMigration = (version, migrate) => {
+  if (hasMigration(version)) return;
+  db.transaction(() => {
+    migrate();
+    db.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES (?,?)').run(version, new Date().toISOString());
+  })();
 };
-addUserColumn('email_verified', 'INTEGER NOT NULL DEFAULT 0 CHECK(email_verified IN (0,1))');
-addUserColumn('must_change_password', 'INTEGER NOT NULL DEFAULT 1 CHECK(must_change_password IN (0,1))');
-addUserColumn("password_setup_status", "TEXT NOT NULL DEFAULT 'PENDING' CHECK(password_setup_status IN ('PENDING','COMPLETED'))");
-addUserColumn('setup_resend_count', 'INTEGER NOT NULL DEFAULT 0');
-addUserColumn('setup_resend_window_started_at', 'INTEGER NOT NULL DEFAULT 0');
-addUserColumn('setup_last_sent_at', 'INTEGER NOT NULL DEFAULT 0');
-db.exec(`UPDATE users SET
-  email_verified=CASE WHEN EXISTS (SELECT 1 FROM companies c WHERE c.id=users.company_id AND c.status='VERIFIED') THEN 1 ELSE 0 END,
-  must_change_password=CASE WHEN password_hash IS NULL THEN 1 ELSE 0 END,
-  password_setup_status=CASE WHEN password_hash IS NULL THEN 'PENDING' ELSE 'COMPLETED' END
-  WHERE email_verified=0 OR must_change_password<>(password_hash IS NULL) OR password_setup_status<>CASE WHEN password_hash IS NULL THEN 'PENDING' ELSE 'COMPLETED' END`);
+
+applyMigration(1, () => {
+  const userColumns = new Set(db.prepare('PRAGMA table_info(users)').all().map(column => column.name));
+  const addUserColumn = (name, definition) => {
+    if (!userColumns.has(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
+  };
+  addUserColumn('email_verified', 'INTEGER NOT NULL DEFAULT 0 CHECK(email_verified IN (0,1))');
+  addUserColumn('must_change_password', 'INTEGER NOT NULL DEFAULT 1 CHECK(must_change_password IN (0,1))');
+  addUserColumn("password_setup_status", "TEXT NOT NULL DEFAULT 'PENDING' CHECK(password_setup_status IN ('PENDING','COMPLETED'))");
+  addUserColumn('setup_resend_count', 'INTEGER NOT NULL DEFAULT 0');
+  addUserColumn('setup_resend_window_started_at', 'INTEGER NOT NULL DEFAULT 0');
+  addUserColumn('setup_last_sent_at', 'INTEGER NOT NULL DEFAULT 0');
+  db.exec(`UPDATE users SET
+    email_verified=CASE WHEN EXISTS (SELECT 1 FROM companies c WHERE c.id=users.company_id AND c.status='VERIFIED') THEN 1 ELSE 0 END,
+    must_change_password=CASE WHEN password_hash IS NULL THEN 1 ELSE 0 END,
+    password_setup_status=CASE WHEN password_hash IS NULL THEN 'PENDING' ELSE 'COMPLETED' END
+    WHERE email_verified=0 OR must_change_password<>(password_hash IS NULL) OR password_setup_status<>CASE WHEN password_hash IS NULL THEN 'PENDING' ELSE 'COMPLETED' END`);
+});
+
+const platformSchema = readFileSync(new URL('./migrations/002_platform_foundation.sql', import.meta.url), 'utf8');
+applyMigration(2, () => db.exec(platformSchema));

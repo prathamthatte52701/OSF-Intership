@@ -30,6 +30,13 @@ A company registration and account portal for **Our Startup Freelancer (OSF)**. 
 - Log out by invalidating the server-side session and clearing the session cookie.
 - Light and dark themes are available.
 
+### Student and platform foundation
+- Student accounts are separate from the company-only `users` table and use email verification, Argon2id password hashes, and their own HTTP-only session cookie.
+- Student profiles store searchable skills and linked projects; professional links, resume references, education, and location remain optional.
+- Companies can publish live challenges, review applicants and submissions, record manual ratings/feedback/shortlists, and create manually reviewed MCQ assessments.
+- Talent discovery filters stored student skills and college information and reports the matching skills directly. Companies can save student profiles.
+- Task files are stored under the ignored local `server/uploads/` directory; SQLite stores metadata and an opaque file reference.
+
 ### Contact page
 - The Contact Us page is present.
 - Support email, phone, and office address are currently marked as **not configured**. These are placeholders, not real OSF contact details.
@@ -68,6 +75,8 @@ A company registration and account portal for **Our Startup Freelancer (OSF)**. 
 │   ├── env.js                # Root .env loading
 │   ├── index.js              # Express API and routes
 │   ├── mail.js               # Nodemailer email templates and transport
+│   ├── migrations/           # Versioned additive platform migrations
+│   ├── platform.js           # Student, challenge, assessment, and talent APIs
 │   ├── security.js           # OTP, token and password security helpers
 │   └── validation.js         # Server-side registration/profile validation
 ├── .env.example
@@ -228,6 +237,46 @@ The frontend build output is written to the root `dist/` directory.
 | POST | `/api/company/profile` | Update the authenticated company's profile |
 | POST | `/api/auth/change-password` | Change the authenticated user's password |
 
+Platform APIs use the authenticated student or company session as the owner identity; request body IDs are never used to select a company or student owner.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| POST | `/api/student/auth/register` | Create a student account and send an email verification code |
+| POST | `/api/student/auth/verify-email` | Verify a student email using its six-digit code |
+| POST | `/api/student/auth/resend-otp` | Resend the student verification code |
+| POST | `/api/student/auth/login` | Sign in with student email and password |
+| GET | `/api/student/auth/session` | Check the student session |
+| POST | `/api/student/auth/logout` | Revoke the student session |
+| GET / PUT | `/api/student/profile` | Get or update the signed-in student's profile |
+| POST / PUT / DELETE | `/api/student/projects`, `/api/student/projects/:id` | Manage the signed-in student's projects |
+| GET | `/api/students/:id` | Retrieve permitted public profile fields |
+| GET | `/api/challenges`, `/api/challenges/:id` | Browse published challenges |
+| POST | `/api/company/challenges` | Create a draft challenge |
+| GET / PUT | `/api/company/challenges`, `/api/company/challenges/:id` | List or update owned challenges |
+| POST | `/api/company/challenges/:id/publish` | Publish an owned challenge |
+| POST | `/api/company/challenges/:id/close` | Close an owned challenge to new applications |
+| POST | `/api/student/challenges/:id/applications` | Apply during the challenge application window |
+| POST | `/api/student/applications/:id/start` | Mark an active task as in progress |
+| GET | `/api/student/applications` | View own applications, submissions, and permitted evaluations |
+| GET | `/api/company/challenges/:id/applications`, `/api/company/applications/:id` | Review applicants to owned challenges |
+| PUT | `/api/student/applications/:id/file` | Upload a task file as raw bytes with `X-File-Name` and MIME type headers |
+| PUT | `/api/student/applications/:id/submission` | Submit GitHub/deployed links, file reference, or supporting information |
+| GET | `/api/student/applications/:id/submission`, `/api/company/applications/:id/submission` | Retrieve a submission for its student or challenge owner |
+| GET | `/api/student/applications/:id/file`, `/api/company/applications/:id/file` | Download an authorized submission file |
+| PUT | `/api/company/applications/:id/evaluation` | Record a manual 1–5 rating, feedback, and shortlist decision |
+| POST / GET | `/api/company/assessments` | Create or list owned MCQ assessments |
+| PUT | `/api/company/assessments/:id` | Update an owned draft assessment |
+| POST / PUT / DELETE | `/api/company/assessments/:id/questions` | Manage questions on an owned draft assessment |
+| POST | `/api/company/assessments/:id/publish`, `/api/company/assessments/:id/close` | Publish or close an owned assessment |
+| GET | `/api/student/assessments`, `/api/student/assessments/:id` | Browse available assessments without answer keys |
+| POST | `/api/student/assessments/:id/attempts` | Start one attempt for an assessment |
+| GET | `/api/student/assessment-attempts`, `/api/student/assessment-attempts/:id` | View own assessment attempts |
+| PUT | `/api/student/assessment-attempts/:id/answers` | Submit selected answers for an attempt |
+| GET | `/api/company/assessments/:id/attempts`, `/api/company/assessment-attempts/:id` | Review attempts for an owned assessment |
+| PUT | `/api/company/assessment-attempts/:id/evaluation` | Record a manual assessment score and feedback |
+| GET | `/api/company/talent`, `/api/company/talent/:id` | Search profiles and inspect skill overlaps/projects |
+| GET / POST / DELETE | `/api/company/saved-students`, `/api/company/saved-students/:studentId` | Manage saved student profiles |
+
 Protected endpoints require a valid session cookie. The backend derives company ownership from the authenticated session; clients do not select the company record to read or update.
 
 ## Security notes
@@ -240,6 +289,10 @@ Protected endpoints require a valid session cookie. The backend derives company 
 - Passwords are hashed using Argon2id.
 - API requests are rate-limited, and Helmet supplies common HTTP security headers.
 - Session identifiers are stored as hashes in SQLite. The browser cookie is HTTP-only and uses SameSite=Lax; the Secure attribute is enabled in production.
+- Student session identifiers use a separate table and cookie; student emails are verified with HMAC-protected OTPs before login.
+- Challenge applicant task deadlines are snapshotted at apply time and are independent from the public application window.
+- Submission uploads are limited to 10 MB and accepted only for matching PDF, TXT, ZIP, PNG, or JPG extension/MIME/content signatures. Files are saved under `server/uploads/`; the directory is not served publicly.
+- Assessment answer keys are returned only to the owning company. Student APIs return questions and selected answers without correct answers; scores and reviews are entered manually.
 - The default session lifetime is 12 hours.
 - Keep all credentials and secrets on the server.
 
@@ -247,7 +300,7 @@ Protected endpoints require a valid session cookie. The backend derives company 
 
 SQLite is created automatically at the configured database path. By default, the database is stored at `server/data/osf.sqlite`. The database directory and SQLite files are excluded from Git.
 
-The server includes additive schema migrations for authentication setup fields. Do not delete the SQLite database to apply code changes if it contains registrations or user accounts. Back up the database before making manual schema or data changes.
+The server applies additive, versioned schema migrations for company authentication and the student/platform modules. Do not delete the SQLite database to apply code changes if it contains registrations or user accounts. Back up the database before making manual schema or data changes.
 
 ## Current limitations and production checklist
 

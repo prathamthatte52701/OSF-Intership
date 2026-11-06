@@ -1,0 +1,841 @@
+import express from 'express';
+import rateLimit from 'express-rate-limit';
+import { randomBytes } from 'node:crypto';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { basename, extname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+import { InputError } from './validation.js';
+import { hashOtp, hashPassword, newId, newOtp, newSecret, otpMatches, sha256, validatePassword, verifyPassword } from './security.js';
+import { sendStudentOtpEmail } from './mail.js';
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const validEmail = value => typeof value === 'string' && value.trim().length <= 254 && emailPattern.test(value.trim());
+const text = (value, max = 500) => typeof value === 'string' ? value.trim().slice(0, max) : '';
+const nowIso = () => new Date().toISOString();
+const nowMs = () => Date.now();
+const studentCookie = 'osf_student_session';
+const studentSessionLifeMs = 12 * 60 * 60 * 1000;
+const studentOtpLifeMs = 5 * 60 * 1000;
+const studentOtpIpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false,
+  handler: (_req, res) => res.status(429).json({ error: 'If the account is eligible, a verification code will be sent. Try again later.' }),
+});
+const serverDir = dirname(fileURLToPath(import.meta.url));
+const uploadDir = resolve(serverDir, 'uploads');
+const publicFileTypes = new Map([
+  ['.pdf', new Set(['application/pdf'])],
+  ['.txt', new Set(['text/plain'])],
+  ['.zip', new Set(['application/zip', 'application/x-zip-compressed'])],
+  ['.png', new Set(['image/png'])],
+  ['.jpg', new Set(['image/jpeg'])],
+  ['.jpeg', new Set(['image/jpeg'])],
+]);
+
+const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+function parseCookie(req, name) {
+  const part = (req.headers.cookie || '').split(';').map(item => item.trim()).find(item => item.startsWith(`${name}=`));
+  if (!part) return '';
+  try { return decodeURIComponent(part.slice(name.length + 1)); } catch { return ''; }
+}
+function studentSessionFor(req, db) {
+  const token = parseCookie(req, studentCookie);
+  if (!token) return null;
+  return db.prepare(`SELECT ss.token_hash,ss.expires_at,su.id AS account_id,su.email,s.id AS student_id
+    FROM student_sessions ss JOIN student_users su ON su.id=ss.student_user_id
+    LEFT JOIN students s ON s.account_id=su.id WHERE ss.token_hash=?`).get(sha256(token));
+}
+function requireStudent(db) {
+  return (req, res, next) => {
+    const session = studentSessionFor(req, db);
+    if (!session || session.expires_at <= nowMs()) {
+      if (session) db.prepare('DELETE FROM student_sessions WHERE token_hash=?').run(session.token_hash);
+      res.setHeader('Set-Cookie', `${studentCookie}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+      return res.status(401).json({ error: 'Sign in to continue.' });
+    }
+    if (db.prepare("SELECT 1 FROM student_users WHERE id=? AND account_status='ACTIVE'").get(session.account_id) == null) {
+      return res.status(403).json({ error: 'This student account is not active.' });
+    }
+    req.student = session;
+    next();
+  };
+}
+function parseSkills(value, { required = false } = {}) {
+  if (value == null && !required) return [];
+  if (!Array.isArray(value) || value.length > 40) throw new InputError('Skills must be a list of up to 40 items.');
+  const items = value.map(item => text(item, 60)).filter(Boolean);
+  if (items.some(item => item.length < 1)) throw new InputError('Each skill must contain text.');
+  const unique = [...new Map(items.map(item => [item.toLocaleLowerCase(), item])).values()];
+  if (required && !unique.length) throw new InputError('Add at least one required skill.');
+  return unique;
+}
+function optionalUrl(value, label) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || value.length > 2048) throw new InputError(`${label} must be a valid web URL.`);
+  let parsed;
+  try { parsed = new URL(value); } catch { throw new InputError(`${label} must be a valid web URL.`); }
+  if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) {
+    throw new InputError(`${label} must be an HTTP or HTTPS URL.`);
+  }
+  return parsed.toString();
+}
+function requiredText(value, label, max) {
+  const cleaned = text(value, max);
+  if (!cleaned) throw new InputError(`${label} is required.`);
+  if (typeof value !== 'string' || value.trim().length > max) throw new InputError(`${label} must be ${max} characters or fewer.`);
+  return cleaned;
+}
+function optionalText(value, label, max) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || value.trim().length > max) throw new InputError(`${label} must be ${max} characters or fewer.`);
+  return value.trim() || null;
+}
+function toIsoDate(value, label) {
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) throw new InputError(`${label} must be a valid date and time.`);
+  return new Date(value).toISOString();
+}
+function assertApplicationDeadline(application) {
+  if (Date.parse(application.individual_deadline) <= nowMs()) {
+    return false;
+  }
+  return true;
+}
+function listStudentSkills(db, studentId) {
+  return db.prepare('SELECT skill FROM student_skills WHERE student_id=? ORDER BY skill COLLATE NOCASE').all(studentId).map(row => row.skill);
+}
+function listProjects(db, studentId) {
+  return db.prepare(`SELECT id,title,description,project_url AS projectUrl,created_at AS createdAt,updated_at AS updatedAt
+    FROM student_projects WHERE student_id=? ORDER BY created_at DESC`).all(studentId);
+}
+function studentProfile(db, studentId, { privateFields = false, includeResume = false } = {}) {
+  const fields = `${privateFields || includeResume ? ',s.resume_reference AS resumeReference' : ''},s.profile_image AS profileImage`;
+  const profile = db.prepare(`SELECT s.id,s.full_name AS fullName${fields},s.college,s.degree,s.graduation_year AS graduationYear,
+      s.about,s.github_url AS githubUrl,s.linkedin_url AS linkedinUrl,s.portfolio_url AS portfolioUrl,s.location,
+      s.created_at AS createdAt,s.updated_at AS updatedAt
+    FROM students s WHERE s.id=?`).get(studentId);
+  if (profile) { profile.skills = listStudentSkills(db, studentId); profile.projects = listProjects(db, studentId); }
+  return profile;
+}
+function assertApplicationOwner(db, appId, studentId) {
+  const app = db.prepare('SELECT * FROM applications WHERE id=? AND student_id=?').get(appId, studentId);
+  if (!app) throw new InputError('Application not found.', 404);
+  return app;
+}
+function ownedChallenge(db, challengeId, companyId) {
+  const challenge = db.prepare('SELECT * FROM challenges WHERE id=? AND company_id=?').get(challengeId, companyId);
+  if (!challenge) throw new InputError('Challenge not found.', 404);
+  return challenge;
+}
+function ownedApplication(db, applicationId, companyId) {
+  const row = db.prepare(`SELECT a.*,c.company_id FROM applications a JOIN challenges c ON c.id=a.challenge_id
+    WHERE a.id=? AND c.company_id=?`).get(applicationId, companyId);
+  if (!row) throw new InputError('Application not found.', 404);
+  return row;
+}
+function syncExpiredApplication(db, application) {
+  if (application.status !== 'SUBMITTED' && application.status !== 'EXPIRED' && Date.parse(application.individual_deadline) <= nowMs()) {
+    db.prepare("UPDATE applications SET status='EXPIRED',updated_at=? WHERE id=? AND status<>'SUBMITTED'").run(nowIso(), application.id);
+    application.status = 'EXPIRED';
+  }
+  return application;
+}
+function fileMetadata(db, applicationId, fileId) {
+  return db.prepare(`SELECT id,application_id,storage_key,original_name,mime_type,size_bytes,created_at
+    FROM submission_files WHERE id=? AND application_id=?`).get(fileId, applicationId);
+}
+function sendSubmissionFile(res, file) {
+  if (!file || !/^[a-f0-9]{32}\.[a-z0-9]{1,8}$/.test(file.storage_key)) throw new InputError('Submission file not found.', 404);
+  const path = resolve(uploadDir, file.storage_key);
+  if (dirname(path) !== uploadDir) throw new InputError('Submission file not found.', 404);
+  if (!existsSync(path)) throw new InputError('Submission file not found.', 404);
+  res.type(file.mime_type).download(path, basename(file.original_name));
+}
+function contentMatchesType(extension, buffer) {
+  if (extension === '.pdf') return buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+  if (extension === '.png') return buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  if (extension === '.jpg' || extension === '.jpeg') return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (extension === '.zip') return buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && [0x03, 0x05, 0x07].includes(buffer[2]) && [0x04, 0x06, 0x08].includes(buffer[3]);
+  if (extension === '.txt') {
+    let content;
+    try { content = new TextDecoder('utf-8', { fatal: true }).decode(buffer); } catch { return false; }
+    return !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(content);
+  }
+  return false;
+}
+
+function validateChallenge(input, current = null) {
+  const roleTitle = requiredText(input.roleTitle ?? current?.role_title, 'Role or title', 150);
+  const taskDescription = requiredText(input.taskDescription ?? current?.task_description, 'Task description', 12000);
+  const skillInput = input.requiredSkills ?? current?.requiredSkills ?? [];
+  const requiredSkills = parseSkills(skillInput);
+  const opensAt = toIsoDate(input.applicationOpensAt ?? current?.application_opens_at, 'Application opening date');
+  const closesAt = toIsoDate(input.applicationClosesAt ?? current?.application_closes_at, 'Application closing date');
+  if (Date.parse(closesAt) < Date.parse(opensAt)) throw new InputError('Application closing date must be after the opening date.');
+  const duration = Number(input.individualTaskDurationDays ?? current?.individual_task_duration_days);
+  if (!Number.isInteger(duration) || duration < 1 || duration > 365) throw new InputError('Individual task duration must be between 1 and 365 days.');
+  const paidValue = input.isPaid ?? current?.is_paid ?? false;
+  if (![true, false, 0, 1].includes(paidValue)) throw new InputError('Paid status must be true or false.');
+  const candidate = input.candidateCount ?? current?.candidate_count ?? null;
+  if (candidate != null && (!Number.isInteger(Number(candidate)) || Number(candidate) < 0)) throw new InputError('Candidate count must be a non-negative whole number.');
+  return {
+    roleTitle, taskDescription, requiredSkills,
+    reference: optionalText(input.reference ?? current?.reference, 'Reference', 300),
+    language: optionalText(input.language ?? current?.language, 'Language', 100),
+    extraInformation: optionalText(input.extraInformation ?? current?.extra_information, 'Extra information', 5000),
+    isPaid: paidValue === true || paidValue === 1 ? 1 : 0,
+    compensationDetails: optionalText(input.compensationDetails ?? current?.compensation_details, 'Compensation details', 500),
+    candidateCount: candidate == null || candidate === '' ? null : Number(candidate),
+    applicationOpensAt: opensAt, applicationClosesAt: closesAt, individualTaskDurationDays: duration,
+  };
+}
+function challengeSkills(db, challengeId) {
+  return db.prepare('SELECT skill FROM challenge_skills WHERE challenge_id=? ORDER BY skill COLLATE NOCASE').all(challengeId).map(row => row.skill);
+}
+function challengeView(db, challenge) {
+  const row = { ...challenge, requiredSkills: challengeSkills(db, challenge.id) };
+  return {
+    id: row.id, companyId: row.company_id, roleTitle: row.role_title, reference: row.reference,
+    taskDescription: row.task_description, requiredSkills: row.requiredSkills, language: row.language,
+    extraInformation: row.extra_information, isPaid: Boolean(row.is_paid), compensationDetails: row.compensation_details,
+    candidateCount: row.candidate_count, applicationOpensAt: row.application_opens_at,
+    applicationClosesAt: row.application_closes_at, individualTaskDurationDays: row.individual_task_duration_days,
+    status: row.status, createdAt: row.created_at, updatedAt: row.updated_at,
+  };
+}
+
+export function createPlatformRouter({ db, requireCompanyAuth }) {
+  const router = express.Router();
+  const studentAuth = requireStudent(db);
+  const companyAuth = requireCompanyAuth;
+
+  // Student accounts use their own table, session table, and cookie. Company users remain untouched.
+  router.post('/student/auth/register', asyncRoute(async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = req.body?.password;
+    if (!validEmail(email)) throw new InputError('Enter a valid email address.');
+    if (!validatePassword(password)) throw new InputError('Use at least 12 characters with uppercase, lowercase, a number and a special character.');
+    const timestamp = nowIso(); const sentAt = nowMs(); const otp = newOtp();
+    const id = newId();
+    const passwordHash = await hashPassword(password);
+    try {
+      db.transaction(() => {
+        db.prepare(`INSERT INTO student_users(id,email,password_hash,email_verified,account_status,password_created_at,updated_at,created_at)
+          VALUES (?,?,?,0,'ACTIVE',?,?,?)`).run(id, email, passwordHash, timestamp, timestamp, timestamp);
+        db.prepare(`INSERT INTO student_otp_challenges(student_user_id,otp_hash,expires_at,attempts,resend_count,resend_window_started_at,last_sent_at)
+          VALUES (?,?,?,0,0,?,?)`).run(id, hashOtp(otp).toString('hex'), sentAt + studentOtpLifeMs, sentAt, sentAt);
+      })();
+    } catch (error) {
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new InputError('A student account already exists for this email.', 409);
+      throw error;
+    }
+    let emailDelivery = 'sent';
+    try { await sendStudentOtpEmail({ to: email, otp }); } catch { emailDelivery = 'failed'; }
+    res.status(201).json({ studentAccountId: id, email, emailVerified: false, emailDelivery });
+  }));
+
+  router.post('/student/auth/verify-email', (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const otp = req.body?.otp;
+    if (!validEmail(email) || typeof otp !== 'string' || !/^\d{6}$/.test(otp)) throw new InputError('Enter the account email and its six-digit verification code.');
+    const record = db.prepare(`SELECT su.id,su.email_verified,o.otp_hash,o.expires_at,o.attempts FROM student_users su
+      JOIN student_otp_challenges o ON o.student_user_id=su.id WHERE su.email=? COLLATE NOCASE`).get(email);
+    if (!record || record.email_verified) throw new InputError('The verification code is unavailable or the email is already verified.', 409);
+    if (record.expires_at <= nowMs()) throw new InputError('This code expired. Request another code.', 410);
+    if (record.attempts >= 5) throw new InputError('Too many incorrect attempts. Request a new code.', 429);
+    if (!otpMatches(otp, record.otp_hash)) {
+      db.prepare('UPDATE student_otp_challenges SET attempts=attempts+1 WHERE student_user_id=? AND attempts<5').run(record.id);
+      throw new InputError('That verification code is incorrect.', 400);
+    }
+    db.transaction(() => {
+      db.prepare('UPDATE student_users SET email_verified=1,updated_at=? WHERE id=?').run(nowIso(), record.id);
+      db.prepare('DELETE FROM student_otp_challenges WHERE student_user_id=?').run(record.id);
+    })();
+    res.json({ verified: true, email: record.email });
+  });
+
+  router.post('/student/auth/resend-otp', studentOtpIpLimiter, asyncRoute(async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const record = validEmail(email) ? db.prepare(`SELECT su.id,su.email,o.resend_count,o.resend_window_started_at,o.last_sent_at
+      FROM student_users su JOIN student_otp_challenges o ON o.student_user_id=su.id
+      WHERE su.email=? COLLATE NOCASE AND su.email_verified=0 AND su.account_status='ACTIVE'`).get(email) : null;
+    const response = { message: 'If the account is eligible, a verification code will be sent.' };
+    if (record) {
+      const current = nowMs(); const reset = current - record.resend_window_started_at >= 60 * 60 * 1000;
+      const count = reset ? 1 : record.resend_count + 1;
+      if (current - record.last_sent_at >= 60 * 1000 && count <= 5) {
+        const otp = newOtp();
+        db.prepare(`UPDATE student_otp_challenges SET otp_hash=?,expires_at=?,attempts=0,resend_count=?,resend_window_started_at=?,last_sent_at=? WHERE student_user_id=?`)
+          .run(hashOtp(otp).toString('hex'), current + studentOtpLifeMs, count, reset ? current : record.resend_window_started_at, current, record.id);
+        try { await sendStudentOtpEmail({ to: record.email, otp }); } catch { console.warn('Student email verification delivery failed.'); }
+      }
+    }
+    res.json(response);
+  }));
+
+  router.post('/student/auth/login', asyncRoute(async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const user = db.prepare('SELECT id,email,password_hash,account_status,email_verified FROM student_users WHERE email=? COLLATE NOCASE').get(email);
+    const valid = Boolean(user && user.account_status === 'ACTIVE' && user.email_verified === 1 && password && await verifyPassword(user.password_hash, password).catch(() => false));
+    if (!valid) throw new InputError('The email or password is incorrect.', 401);
+    const token = newSecret(32); const expires = nowMs() + studentSessionLifeMs;
+    db.prepare('INSERT INTO student_sessions(token_hash,student_user_id,expires_at,created_at) VALUES (?,?,?,?)').run(sha256(token), user.id, expires, nowIso());
+    res.setHeader('Set-Cookie', `${studentCookie}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${studentSessionLifeMs / 1000}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+    res.json({ authenticated: true, email: user.email, expiresAt: new Date(expires).toISOString() });
+  }));
+  router.get('/student/auth/session', studentAuth, (req, res) => res.json({ authenticated: true, email: req.student.email, profileCreated: Boolean(req.student.student_id) }));
+  router.post('/student/auth/logout', (req, res) => {
+    const token = parseCookie(req, studentCookie);
+    if (token) db.prepare('DELETE FROM student_sessions WHERE token_hash=?').run(sha256(token));
+    res.setHeader('Set-Cookie', `${studentCookie}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+    res.json({ loggedOut: true });
+  });
+
+  router.get('/student/profile', studentAuth, (req, res) => {
+    const profile = req.student.student_id ? studentProfile(db, req.student.student_id, { privateFields: true }) : null;
+    res.json({ profile });
+  });
+  router.put('/student/profile', studentAuth, (req, res) => {
+    const body = req.body || {};
+    const fullName = requiredText(body.fullName, 'Full name', 150);
+    const graduationYear = body.graduationYear == null || body.graduationYear === '' ? null : Number(body.graduationYear);
+    if (graduationYear != null && (!Number.isInteger(graduationYear) || graduationYear < 1950 || graduationYear > 2200)) throw new InputError('Graduation year must be between 1950 and 2200.');
+    const skills = parseSkills(body.skills);
+    const timestamp = nowIso();
+    const values = {
+      fullName, profileImage: optionalUrl(body.profileImage, 'Profile image'), college: optionalText(body.college, 'College or university', 200),
+      degree: optionalText(body.degree, 'Degree or course', 160), graduationYear,
+      about: optionalText(body.about, 'About', 3000), resumeReference: optionalUrl(body.resumeReference, 'Resume URL'),
+      githubUrl: optionalUrl(body.githubUrl, 'GitHub URL'), linkedinUrl: optionalUrl(body.linkedinUrl, 'LinkedIn URL'),
+      portfolioUrl: optionalUrl(body.portfolioUrl, 'Portfolio URL'), location: optionalText(body.location, 'Location', 160),
+    };
+    const save = db.transaction(() => {
+      let id = req.student.student_id;
+      if (!id) {
+        id = newId();
+        db.prepare(`INSERT INTO students(id,account_id,full_name,profile_image,college,degree,graduation_year,about,resume_reference,github_url,linkedin_url,portfolio_url,location,created_at,updated_at)
+          VALUES (@id,@accountId,@fullName,@profileImage,@college,@degree,@graduationYear,@about,@resumeReference,@githubUrl,@linkedinUrl,@portfolioUrl,@location,@timestamp,@timestamp)`)
+          .run({ ...values, id, accountId: req.student.account_id, timestamp });
+      } else {
+        db.prepare(`UPDATE students SET full_name=@fullName,profile_image=@profileImage,college=@college,degree=@degree,graduation_year=@graduationYear,
+          about=@about,resume_reference=@resumeReference,github_url=@githubUrl,linkedin_url=@linkedinUrl,portfolio_url=@portfolioUrl,location=@location,updated_at=@timestamp WHERE id=@id`)
+          .run({ ...values, id, timestamp });
+      }
+      db.prepare('DELETE FROM student_skills WHERE student_id=?').run(id);
+      const addSkill = db.prepare('INSERT INTO student_skills(id,student_id,skill,created_at) VALUES (?,?,?,?)');
+      for (const skill of skills) addSkill.run(newId(), id, skill, timestamp);
+      return id;
+    });
+    const id = save();
+    res.json({ profile: studentProfile(db, id, { privateFields: true }) });
+  });
+  router.post('/student/projects', studentAuth, (req, res) => {
+    if (!req.student.student_id) throw new InputError('Create your student profile before adding projects.', 409);
+    const title = requiredText(req.body?.title, 'Project title', 150);
+    const description = optionalText(req.body?.description, 'Project description', 3000);
+    const projectUrl = optionalUrl(req.body?.projectUrl, 'Project URL');
+    const id = newId(); const timestamp = nowIso();
+    db.prepare(`INSERT INTO student_projects(id,student_id,title,description,project_url,created_at,updated_at) VALUES (?,?,?,?,?,?,?)`)
+      .run(id, req.student.student_id, title, description, projectUrl, timestamp, timestamp);
+    res.status(201).json({ project: listProjects(db, req.student.student_id).find(project => project.id === id) });
+  });
+  router.put('/student/projects/:id', studentAuth, (req, res) => {
+    if (!req.student.student_id) throw new InputError('Create your student profile before adding projects.', 409);
+    const project = db.prepare('SELECT id FROM student_projects WHERE id=? AND student_id=?').get(req.params.id, req.student.student_id);
+    if (!project) throw new InputError('Project not found.', 404);
+    const title = requiredText(req.body?.title, 'Project title', 150);
+    db.prepare('UPDATE student_projects SET title=?,description=?,project_url=?,updated_at=? WHERE id=? AND student_id=?')
+      .run(title, optionalText(req.body?.description, 'Project description', 3000), optionalUrl(req.body?.projectUrl, 'Project URL'), nowIso(), project.id, req.student.student_id);
+    res.json({ project: listProjects(db, req.student.student_id).find(item => item.id === project.id) });
+  });
+  router.delete('/student/projects/:id', studentAuth, (req, res) => {
+    if (!req.student.student_id) throw new InputError('Create your student profile before adding projects.', 409);
+    const result = db.prepare('DELETE FROM student_projects WHERE id=? AND student_id=?').run(req.params.id, req.student.student_id);
+    if (!result.changes) throw new InputError('Project not found.', 404);
+    res.json({ deleted: true });
+  });
+  router.get('/students/:id', (req, res) => {
+    const profile = studentProfile(db, req.params.id);
+    if (!profile) throw new InputError('Student profile not found.', 404);
+    res.json({ profile });
+  });
+
+  // Students can see published challenges and apply only during the public window.
+  router.get('/challenges', (req, res) => {
+    const skills = typeof req.query.skills === 'string' ? req.query.skills.split(',').map(value => text(value, 60)).filter(Boolean).slice(0, 20) : [];
+    const clauses = ["c.status='PUBLISHED'"];
+    const params = [];
+    if (skills.length) {
+      clauses.push(`EXISTS (SELECT 1 FROM challenge_skills cs WHERE cs.challenge_id=c.id AND cs.skill IN (${skills.map(() => '?').join(',')} COLLATE NOCASE))`);
+      params.push(...skills);
+    }
+    const rows = db.prepare(`SELECT c.* FROM challenges c WHERE ${clauses.join(' AND ')} ORDER BY c.application_closes_at ASC LIMIT 100`).all(...params);
+    res.json({ challenges: rows.map(row => challengeView(db, row)) });
+  });
+  router.get('/challenges/:id', (req, res) => {
+    const row = db.prepare("SELECT * FROM challenges WHERE id=? AND status='PUBLISHED'").get(req.params.id);
+    if (!row) throw new InputError('Challenge not found.', 404);
+    res.json({ challenge: challengeView(db, row) });
+  });
+  router.post('/student/challenges/:id/applications', studentAuth, (req, res) => {
+    if (!req.student.student_id) throw new InputError('Complete your student profile before applying.', 409);
+    const challenge = db.prepare("SELECT * FROM challenges WHERE id=? AND status='PUBLISHED'").get(req.params.id);
+    if (!challenge) throw new InputError('Challenge is not available for applications.', 404);
+    const appliedAt = nowMs();
+    if (appliedAt < Date.parse(challenge.application_opens_at) || appliedAt > Date.parse(challenge.application_closes_at)) throw new InputError('Applications are outside this challenge’s application window.', 409);
+    const appliedIso = new Date(appliedAt).toISOString();
+    const deadline = new Date(appliedAt + challenge.individual_task_duration_days * 86400000).toISOString();
+    const id = newId();
+    try {
+      db.prepare(`INSERT INTO applications(id,challenge_id,student_id,applied_at,individual_deadline,status,created_at,updated_at)
+        VALUES (?,?,?,?,?,'APPLIED',?,?)`).run(id, challenge.id, req.student.student_id, appliedIso, deadline, appliedIso, appliedIso);
+    } catch (error) {
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new InputError('You already applied to this challenge.', 409);
+      throw error;
+    }
+    res.status(201).json({ application: { id, challengeId: challenge.id, appliedAt: appliedIso, individualDeadline: deadline, status: 'APPLIED' } });
+  });
+  router.post('/student/applications/:id/start', studentAuth, (req, res) => {
+    const application = assertApplicationOwner(db, req.params.id, req.student.student_id);
+    if (!assertApplicationDeadline(application)) {
+      syncExpiredApplication(db, application);
+      throw new InputError('The individual task deadline has passed.', 409);
+    }
+    if (application.status === 'SUBMITTED') throw new InputError('This application has already been submitted.', 409);
+    if (application.status === 'EXPIRED') throw new InputError('The individual task deadline has passed.', 409);
+    if (application.status === 'APPLIED') db.prepare("UPDATE applications SET status='IN_PROGRESS',updated_at=? WHERE id=?").run(nowIso(), application.id);
+    res.json({ application: { id: application.id, status: 'IN_PROGRESS', individualDeadline: application.individual_deadline } });
+  });
+  router.get('/student/applications', studentAuth, (req, res) => {
+    const applications = db.prepare(`SELECT a.id,a.challenge_id AS challengeId,a.applied_at AS appliedAt,a.individual_deadline AS individualDeadline,
+      a.status,a.updated_at AS updatedAt,c.role_title AS roleTitle,c.status AS challengeStatus,c.application_closes_at AS applicationClosesAt
+      FROM applications a JOIN challenges c ON c.id=a.challenge_id WHERE a.student_id=? ORDER BY a.applied_at DESC`).all(req.student.student_id);
+    const rows = applications.map(application => {
+      const expired = application.status !== 'SUBMITTED' && Date.parse(application.individualDeadline) <= nowMs();
+      if (expired && application.status !== 'EXPIRED') db.prepare("UPDATE applications SET status='EXPIRED',updated_at=? WHERE id=? AND status<>'SUBMITTED'").run(nowIso(), application.id);
+      return { ...application, status: expired ? 'EXPIRED' : application.status, submission: db.prepare('SELECT submitted_at AS submittedAt FROM submissions WHERE application_id=?').get(application.id) || null,
+        evaluation: db.prepare('SELECT rating,feedback,is_shortlisted AS isShortlisted,evaluated_at AS evaluatedAt FROM evaluations WHERE application_id=?').get(application.id) || null };
+    });
+    res.json({ applications: rows });
+  });
+
+  // Company-owned challenge management.
+  router.post('/company/challenges', companyAuth, (req, res) => {
+    const challenge = validateChallenge(req.body || {});
+    const id = newId(); const timestamp = nowIso();
+    const create = db.transaction(() => {
+      db.prepare(`INSERT INTO challenges(id,company_id,role_title,reference,task_description,language,extra_information,is_paid,compensation_details,candidate_count,
+        application_opens_at,application_closes_at,individual_task_duration_days,status,created_at,updated_at)
+        VALUES (@id,@companyId,@roleTitle,@reference,@taskDescription,@language,@extraInformation,@isPaid,@compensationDetails,@candidateCount,
+        @applicationOpensAt,@applicationClosesAt,@individualTaskDurationDays,'DRAFT',@timestamp,@timestamp)`)
+        .run({ ...challenge, id, companyId: req.session.company_id, timestamp });
+      const insert = db.prepare('INSERT INTO challenge_skills(id,challenge_id,skill,created_at) VALUES (?,?,?,?)');
+      for (const skill of challenge.requiredSkills) insert.run(newId(), id, skill, timestamp);
+    });
+    create();
+    res.status(201).json({ challenge: challengeView(db, db.prepare('SELECT * FROM challenges WHERE id=?').get(id)) });
+  });
+  router.get('/company/challenges', companyAuth, (req, res) => {
+    const rows = db.prepare('SELECT * FROM challenges WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
+    res.json({ challenges: rows.map(row => ({ ...challengeView(db, row), applicationCount: db.prepare('SELECT COUNT(*) AS count FROM applications WHERE challenge_id=?').get(row.id).count })) });
+  });
+  router.put('/company/challenges/:id', companyAuth, (req, res) => {
+    const existing = ownedChallenge(db, req.params.id, req.session.company_id);
+    const challenge = validateChallenge(req.body || {}, { ...existing, requiredSkills: challengeSkills(db, existing.id) });
+    const timestamp = nowIso();
+    const save = db.transaction(() => {
+      db.prepare(`UPDATE challenges SET role_title=@roleTitle,reference=@reference,task_description=@taskDescription,language=@language,
+        extra_information=@extraInformation,is_paid=@isPaid,compensation_details=@compensationDetails,candidate_count=@candidateCount,
+        application_opens_at=@applicationOpensAt,application_closes_at=@applicationClosesAt,individual_task_duration_days=@individualTaskDurationDays,updated_at=@timestamp
+        WHERE id=@id AND company_id=@companyId`).run({ ...challenge, timestamp, id: existing.id, companyId: req.session.company_id });
+      db.prepare('DELETE FROM challenge_skills WHERE challenge_id=?').run(existing.id);
+      const insert = db.prepare('INSERT INTO challenge_skills(id,challenge_id,skill,created_at) VALUES (?,?,?,?)');
+      for (const skill of challenge.requiredSkills) insert.run(newId(), existing.id, skill, timestamp);
+    });
+    save();
+    res.json({ challenge: challengeView(db, db.prepare('SELECT * FROM challenges WHERE id=?').get(existing.id)) });
+  });
+  router.post('/company/challenges/:id/publish', companyAuth, (req, res) => {
+    const challenge = ownedChallenge(db, req.params.id, req.session.company_id);
+    if (challenge.status === 'CLOSED') throw new InputError('A closed challenge cannot be published again.', 409);
+    if (!challengeSkills(db, challenge.id).length) throw new InputError('Add at least one required skill before publishing.');
+    if (Date.parse(challenge.application_closes_at) < nowMs()) throw new InputError('The application window has already closed.');
+    db.prepare("UPDATE challenges SET status='PUBLISHED',updated_at=? WHERE id=? AND company_id=?").run(nowIso(), challenge.id, req.session.company_id);
+    res.json({ challenge: challengeView(db, db.prepare('SELECT * FROM challenges WHERE id=?').get(challenge.id)) });
+  });
+  router.post('/company/challenges/:id/close', companyAuth, (req, res) => {
+    const challenge = ownedChallenge(db, req.params.id, req.session.company_id);
+    db.prepare("UPDATE challenges SET status='CLOSED',updated_at=? WHERE id=?").run(nowIso(), challenge.id);
+    res.json({ closed: true });
+  });
+
+  // Company applicant, submission, and evaluation views always join through owned challenges.
+  router.get('/company/challenges/:id/applications', companyAuth, (req, res) => {
+    const challenge = ownedChallenge(db, req.params.id, req.session.company_id);
+    const rows = db.prepare(`SELECT a.id,a.student_id AS studentId,a.applied_at AS appliedAt,a.individual_deadline AS individualDeadline,a.status,
+      s.full_name AS fullName,s.college,s.degree FROM applications a JOIN students s ON s.id=a.student_id WHERE a.challenge_id=? ORDER BY a.applied_at DESC`).all(challenge.id);
+    const applications = rows.map(row => {
+      if (row.status !== 'SUBMITTED' && Date.parse(row.individualDeadline) <= nowMs()) {
+        db.prepare("UPDATE applications SET status='EXPIRED',updated_at=? WHERE id=? AND status<>'SUBMITTED'").run(nowIso(), row.id);
+        return { ...row, status: 'EXPIRED' };
+      }
+      return row;
+    });
+    res.json({ applications });
+  });
+  router.get('/company/applications/:id', companyAuth, (req, res) => {
+    const application = syncExpiredApplication(db, ownedApplication(db, req.params.id, req.session.company_id));
+    const profile = studentProfile(db, application.student_id, { includeResume: true });
+    const submission = db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
+      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=?`).get(application.id) || null;
+    if (submission?.fileReference) submission.file = fileMetadata(db, application.id, submission.fileReference) ? { id: submission.fileReference } : null;
+    const evaluation = db.prepare('SELECT id,rating,feedback,is_shortlisted AS isShortlisted,evaluated_at AS evaluatedAt FROM evaluations WHERE application_id=?').get(application.id) || null;
+    res.json({ application: { id: application.id, challengeId: application.challenge_id, appliedAt: application.applied_at, individualDeadline: application.individual_deadline, status: application.status, student: profile, submission, evaluation } });
+  });
+  router.get('/company/applications/:id/file', companyAuth, (req, res) => {
+    const application = ownedApplication(db, req.params.id, req.session.company_id);
+    const file = db.prepare(`SELECT f.* FROM submission_files f JOIN submissions s ON s.file_reference=f.id WHERE f.application_id=?`).get(application.id);
+    sendSubmissionFile(res, file);
+  });
+  router.get('/student/applications/:id/file', studentAuth, (req, res) => {
+    assertApplicationOwner(db, req.params.id, req.student.student_id);
+    const file = db.prepare(`SELECT f.* FROM submission_files f JOIN submissions s ON s.file_reference=f.id WHERE f.application_id=?`).get(req.params.id);
+    sendSubmissionFile(res, file);
+  });
+  router.put('/student/applications/:id/file', studentAuth, express.raw({
+    type: ['application/octet-stream', ...[...publicFileTypes.values()].flatMap(types => [...types])], limit: '10mb',
+  }), asyncRoute(async (req, res) => {
+    const application = assertApplicationOwner(db, req.params.id, req.student.student_id);
+    if (!assertApplicationDeadline(application)) throw new InputError('The individual task deadline has passed.', 409);
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new InputError('Upload a non-empty file.');
+    const fileNameHeader = req.get('x-file-name');
+    if (!fileNameHeader || fileNameHeader.length > 180) throw new InputError('Provide a file name of 180 characters or fewer in X-File-Name.');
+    const originalName = basename(fileNameHeader.replace(/\\/g, '/')).replace(/[\r\n\0]/g, '').slice(0, 180);
+    const extension = extname(originalName).toLowerCase();
+    const allowedMime = publicFileTypes.get(extension);
+    const mimeType = String(req.get('x-file-mime') || req.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!allowedMime || !allowedMime.has(mimeType) || !contentMatchesType(extension, req.body)) throw new InputError('File extension, MIME type, or file contents are not supported or do not match. Supported files: PDF, TXT, ZIP, PNG, JPG.');
+    const storageKey = `${randomBytes(16).toString('hex')}${extension}`;
+    await mkdir(uploadDir, { recursive: true });
+    const filePath = resolve(uploadDir, storageKey);
+    await writeFile(filePath, req.body, { flag: 'wx', mode: 0o600 });
+    const id = newId(); const timestamp = nowIso();
+    try {
+      db.prepare('INSERT INTO submission_files(id,application_id,storage_key,original_name,mime_type,size_bytes,created_at) VALUES (?,?,?,?,?,?,?)')
+        .run(id, application.id, storageKey, originalName, mimeType, req.body.length, timestamp);
+      const existing = db.prepare('SELECT id FROM submissions WHERE application_id=?').get(application.id);
+      if (existing) db.prepare('UPDATE submissions SET file_reference=?,updated_at=? WHERE application_id=?').run(id, timestamp, application.id);
+    } catch (error) {
+      await unlink(filePath).catch(() => {});
+      throw error;
+    }
+    res.status(201).json({ file: { id, name: originalName, mimeType, sizeBytes: req.body.length } });
+  }));
+  router.put('/student/applications/:id/submission', studentAuth, (req, res) => {
+    const application = assertApplicationOwner(db, req.params.id, req.student.student_id);
+    if (!assertApplicationDeadline(application)) throw new InputError('The individual task deadline has passed.', 409);
+    const body = req.body || {};
+    const githubUrl = optionalUrl(body.githubUrl, 'GitHub repository URL');
+    const deployedUrl = optionalUrl(body.deployedUrl, 'Deployed website URL');
+    const supportingInformation = optionalText(body.supportingInformation, 'Supporting information', 5000);
+    const fileReference = optionalText(body.fileReference, 'File reference', 40);
+    if (!githubUrl && !deployedUrl && !supportingInformation && !fileReference) throw new InputError('Add a repository, deployed website, uploaded file, or supporting information.');
+    if (fileReference && !fileMetadata(db, application.id, fileReference)) throw new InputError('Uploaded file not found for this application.', 400);
+    const timestamp = nowIso();
+    const save = db.transaction(() => {
+      db.prepare(`INSERT INTO submissions(id,application_id,github_url,deployed_url,file_reference,supporting_information,submitted_at,created_at,updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(application_id) DO UPDATE SET github_url=excluded.github_url,deployed_url=excluded.deployed_url,
+        file_reference=COALESCE(excluded.file_reference,submissions.file_reference),supporting_information=excluded.supporting_information,
+        submitted_at=excluded.submitted_at,updated_at=excluded.updated_at`)
+        .run(newId(), application.id, githubUrl, deployedUrl, fileReference, supportingInformation, timestamp, timestamp, timestamp);
+      db.prepare("UPDATE applications SET status='SUBMITTED',updated_at=? WHERE id=?").run(timestamp, application.id);
+    });
+    save();
+    res.json({ submission: db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
+      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=?`).get(application.id) });
+  });
+  router.get('/student/applications/:id/submission', studentAuth, (req, res) => {
+    assertApplicationOwner(db, req.params.id, req.student.student_id);
+    const submission = db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
+      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=?`).get(req.params.id) || null;
+    res.json({ submission });
+  });
+  router.get('/company/applications/:id/submission', companyAuth, (req, res) => {
+    const app = ownedApplication(db, req.params.id, req.session.company_id);
+    const submission = db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
+      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=?`).get(app.id) || null;
+    res.json({ submission });
+  });
+  router.put('/company/applications/:id/evaluation', companyAuth, (req, res) => {
+    const application = ownedApplication(db, req.params.id, req.session.company_id);
+    if (!db.prepare('SELECT 1 FROM submissions WHERE application_id=?').get(application.id)) throw new InputError('Submit a task before evaluating this application.', 409);
+    const body = req.body || {};
+    const rating = body.rating == null || body.rating === '' ? null : Number(body.rating);
+    if (rating != null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) throw new InputError('Rating must be a whole number from 1 to 5.');
+    const feedback = optionalText(body.feedback, 'Feedback', 5000);
+    const shortlisted = body.isShortlisted ?? false;
+    if (![true, false, 0, 1].includes(shortlisted)) throw new InputError('Shortlist status must be true or false.');
+    const timestamp = nowIso();
+    db.prepare(`INSERT INTO evaluations(id,application_id,rating,feedback,is_shortlisted,evaluated_by,evaluated_at,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(application_id) DO UPDATE SET rating=excluded.rating,feedback=excluded.feedback,
+      is_shortlisted=excluded.is_shortlisted,evaluated_by=excluded.evaluated_by,evaluated_at=excluded.evaluated_at,updated_at=excluded.updated_at`)
+      .run(newId(), application.id, rating, feedback, shortlisted === true || shortlisted === 1 ? 1 : 0, req.session.account_id, timestamp, timestamp, timestamp);
+    res.json({ evaluation: db.prepare('SELECT id,rating,feedback,is_shortlisted AS isShortlisted,evaluated_at AS evaluatedAt FROM evaluations WHERE application_id=?').get(application.id) });
+  });
+
+  // Company-authored MCQ assessments keep answer keys on the server. Student serializers
+  // below select only prompt/options and never include correct_answer.
+  router.post('/company/assessments', companyAuth, (req, res) => {
+    const title = requiredText(req.body?.title, 'Assessment title', 150);
+    const relatedSkill = requiredText(req.body?.relatedSkill, 'Related skill', 80);
+    const duration = req.body?.durationMinutes == null || req.body.durationMinutes === '' ? null : Number(req.body.durationMinutes);
+    if (duration != null && (!Number.isInteger(duration) || duration < 1 || duration > 1440)) throw new InputError('Duration must be between 1 and 1440 minutes.');
+    const description = optionalText(req.body?.description, 'Description', 3000);
+    const instructions = optionalText(req.body?.instructions, 'Instructions', 3000);
+    const id = newId(); const timestamp = nowIso();
+    db.prepare(`INSERT INTO skill_assessments(id,company_id,title,description,related_skill,instructions,duration_minutes,status,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,'DRAFT',?,?)`).run(id, req.session.company_id, title, description, relatedSkill, instructions, duration, timestamp, timestamp);
+    res.status(201).json({ assessment: companyAssessment(db, id) });
+  });
+  router.get('/company/assessments', companyAuth, (req, res) => {
+    const rows = db.prepare('SELECT id FROM skill_assessments WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
+    res.json({ assessments: rows.map(row => companyAssessment(db, row.id)) });
+  });
+  router.put('/company/assessments/:id', companyAuth, (req, res) => {
+    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    const title = requiredText(req.body?.title ?? assessment.title, 'Assessment title', 150);
+    const relatedSkill = requiredText(req.body?.relatedSkill ?? assessment.related_skill, 'Related skill', 80);
+    const duration = req.body?.durationMinutes === undefined ? assessment.duration_minutes : req.body.durationMinutes === null || req.body.durationMinutes === '' ? null : Number(req.body.durationMinutes);
+    if (duration != null && (!Number.isInteger(duration) || duration < 1 || duration > 1440)) throw new InputError('Duration must be between 1 and 1440 minutes.');
+    db.prepare(`UPDATE skill_assessments SET title=?,description=?,related_skill=?,instructions=?,duration_minutes=?,updated_at=? WHERE id=? AND company_id=?`)
+      .run(title, optionalText(req.body?.description ?? assessment.description, 'Description', 3000), relatedSkill,
+        optionalText(req.body?.instructions ?? assessment.instructions, 'Instructions', 3000), duration, nowIso(), assessment.id, req.session.company_id);
+    res.json({ assessment: companyAssessment(db, assessment.id) });
+  });
+  router.post('/company/assessments/:id/questions', companyAuth, (req, res) => {
+    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    if (assessment.status !== 'DRAFT') throw new InputError('Questions can be edited while the assessment is a draft.', 409);
+    const questionText = requiredText(req.body?.questionText, 'Question', 3000);
+    const options = ['A', 'B', 'C', 'D'].map(key => requiredText(req.body?.[`option${key}`], `Option ${key}`, 1000));
+    const correctAnswer = typeof req.body?.correctAnswer === 'string' ? req.body.correctAnswer.toUpperCase() : '';
+    if (!['A', 'B', 'C', 'D'].includes(correctAnswer)) throw new InputError('Correct answer must be A, B, C, or D.');
+    const questionOrder = req.body?.questionOrder == null ? (db.prepare('SELECT COALESCE(MAX(question_order),0)+1 AS next FROM skill_assessment_questions WHERE assessment_id=?').get(assessment.id).next) : Number(req.body.questionOrder);
+    if (!Number.isInteger(questionOrder) || questionOrder < 1 || questionOrder > 500) throw new InputError('Question order must be between 1 and 500.');
+    const id = newId(); const timestamp = nowIso();
+    try {
+      db.prepare(`INSERT INTO skill_assessment_questions(id,assessment_id,question_text,option_a,option_b,option_c,option_d,correct_answer,question_order,created_at,updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(id, assessment.id, questionText, ...options, correctAnswer, questionOrder, timestamp, timestamp);
+    } catch (error) {
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new InputError('A question already uses that order number.', 409);
+      throw error;
+    }
+    res.status(201).json({ question: companyQuestion(db, id) });
+  });
+  router.put('/company/assessments/:id/questions/:questionId', companyAuth, (req, res) => {
+    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    if (assessment.status !== 'DRAFT') throw new InputError('Questions can be edited while the assessment is a draft.', 409);
+    const existing = db.prepare('SELECT * FROM skill_assessment_questions WHERE id=? AND assessment_id=?').get(req.params.questionId, assessment.id);
+    if (!existing) throw new InputError('Question not found.', 404);
+    const questionText = requiredText(req.body?.questionText ?? existing.question_text, 'Question', 3000);
+    const options = ['A', 'B', 'C', 'D'].map(key => requiredText(req.body?.[`option${key}`] ?? existing[`option_${key.toLowerCase()}`], `Option ${key}`, 1000));
+    const correctAnswer = String(req.body?.correctAnswer ?? existing.correct_answer).toUpperCase();
+    if (!['A', 'B', 'C', 'D'].includes(correctAnswer)) throw new InputError('Correct answer must be A, B, C, or D.');
+    const order = req.body?.questionOrder == null ? existing.question_order : Number(req.body.questionOrder);
+    if (!Number.isInteger(order) || order < 1 || order > 500) throw new InputError('Question order must be between 1 and 500.');
+    try {
+      db.prepare(`UPDATE skill_assessment_questions SET question_text=?,option_a=?,option_b=?,option_c=?,option_d=?,correct_answer=?,question_order=?,updated_at=?
+        WHERE id=? AND assessment_id=?`).run(questionText, ...options, correctAnswer, order, nowIso(), existing.id, assessment.id);
+    } catch (error) {
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new InputError('A question already uses that order number.', 409);
+      throw error;
+    }
+    res.json({ question: companyQuestion(db, existing.id) });
+  });
+  router.delete('/company/assessments/:id/questions/:questionId', companyAuth, (req, res) => {
+    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    if (assessment.status !== 'DRAFT') throw new InputError('Questions can be edited while the assessment is a draft.', 409);
+    const removed = db.prepare('DELETE FROM skill_assessment_questions WHERE id=? AND assessment_id=?').run(req.params.questionId, assessment.id);
+    if (!removed.changes) throw new InputError('Question not found.', 404);
+    res.json({ deleted: true });
+  });
+  router.post('/company/assessments/:id/publish', companyAuth, (req, res) => {
+    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    if (assessment.status === 'CLOSED') throw new InputError('A closed assessment cannot be published again.', 409);
+    if (!db.prepare('SELECT 1 FROM skill_assessment_questions WHERE assessment_id=? LIMIT 1').get(assessment.id)) throw new InputError('Add at least one question before publishing.');
+    db.prepare("UPDATE skill_assessments SET status='PUBLISHED',updated_at=? WHERE id=?").run(nowIso(), assessment.id);
+    res.json({ assessment: companyAssessment(db, assessment.id) });
+  });
+  router.post('/company/assessments/:id/close', companyAuth, (req, res) => {
+    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    db.prepare("UPDATE skill_assessments SET status='CLOSED',updated_at=? WHERE id=?").run(nowIso(), assessment.id);
+    res.json({ closed: true });
+  });
+  router.get('/student/assessments', studentAuth, (req, res) => {
+    const assessments = db.prepare("SELECT id,title,description,related_skill AS relatedSkill,instructions,duration_minutes AS durationMinutes FROM skill_assessments WHERE status='PUBLISHED' ORDER BY created_at DESC LIMIT 100").all();
+    res.json({ assessments });
+  });
+  router.get('/student/assessments/:id', studentAuth, (req, res) => {
+    const assessment = db.prepare("SELECT id,title,description,related_skill AS relatedSkill,instructions,duration_minutes AS durationMinutes FROM skill_assessments WHERE id=? AND status='PUBLISHED'").get(req.params.id);
+    if (!assessment) throw new InputError('Assessment not found.', 404);
+    assessment.questions = studentQuestions(db, assessment.id);
+    res.json({ assessment });
+  });
+  router.post('/student/assessments/:id/attempts', studentAuth, (req, res) => {
+    if (!req.student.student_id) throw new InputError('Complete your student profile before starting an assessment.', 409);
+    const assessment = db.prepare("SELECT id FROM skill_assessments WHERE id=? AND status='PUBLISHED'").get(req.params.id);
+    if (!assessment) throw new InputError('Assessment is not available.', 404);
+    const id = newId(); const timestamp = nowIso();
+    try {
+      db.prepare(`INSERT INTO skill_assessment_attempts(id,assessment_id,student_id,started_at,status,review_status,created_at,updated_at)
+        VALUES (?,?,?,?,'IN_PROGRESS','PENDING',?,?)`).run(id, assessment.id, req.student.student_id, timestamp, timestamp, timestamp);
+    } catch (error) {
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new InputError('You already have an attempt for this assessment.', 409);
+      throw error;
+    }
+    res.status(201).json({ attempt: studentAttempt(db, id) });
+  });
+  router.get('/student/assessment-attempts', studentAuth, (req, res) => {
+    if (!req.student.student_id) return res.json({ attempts: [] });
+    const rows = db.prepare('SELECT id FROM skill_assessment_attempts WHERE student_id=? ORDER BY started_at DESC').all(req.student.student_id);
+    res.json({ attempts: rows.map(row => studentAttempt(db, row.id)) });
+  });
+  router.get('/student/assessment-attempts/:id', studentAuth, (req, res) => {
+    const attempt = db.prepare('SELECT id FROM skill_assessment_attempts WHERE id=? AND student_id=?').get(req.params.id, req.student.student_id);
+    if (!attempt) throw new InputError('Assessment attempt not found.', 404);
+    res.json({ attempt: studentAttempt(db, attempt.id) });
+  });
+  router.put('/student/assessment-attempts/:id/answers', studentAuth, (req, res) => {
+    const attempt = db.prepare(`SELECT a.*,s.duration_minutes FROM skill_assessment_attempts a JOIN skill_assessments s ON s.id=a.assessment_id
+      WHERE a.id=? AND a.student_id=?`).get(req.params.id, req.student.student_id);
+    if (!attempt) throw new InputError('Assessment attempt not found.', 404);
+    if (attempt.status !== 'IN_PROGRESS') throw new InputError('This assessment attempt has already been submitted.', 409);
+    if (attempt.duration_minutes && Date.parse(attempt.started_at) + attempt.duration_minutes * 60000 < nowMs()) {
+      db.prepare("UPDATE skill_assessment_attempts SET status='EXPIRED',updated_at=? WHERE id=?").run(nowIso(), attempt.id);
+      throw new InputError('The assessment time limit has passed.', 409);
+    }
+    const answers = req.body?.answers;
+    if (!Array.isArray(answers) || answers.length > 500) throw new InputError('Answers must be a list of up to 500 responses.');
+    const questionIds = new Set(db.prepare('SELECT id FROM skill_assessment_questions WHERE assessment_id=?').all(attempt.assessment_id).map(row => row.id));
+    const normalized = answers.map(answer => {
+      const questionId = text(answer?.questionId, 80);
+      const selectedOption = typeof answer?.selectedOption === 'string' ? answer.selectedOption.toUpperCase() : '';
+      if (!questionIds.has(questionId) || !['A', 'B', 'C', 'D'].includes(selectedOption)) throw new InputError('Each response must select A, B, C, or D for a question in this assessment.');
+      return { questionId, selectedOption };
+    });
+    if (new Set(normalized.map(answer => answer.questionId)).size !== normalized.length) throw new InputError('Each question can be answered only once.');
+    const timestamp = nowIso();
+    const submit = db.transaction(() => {
+      db.prepare('DELETE FROM skill_assessment_answers WHERE attempt_id=?').run(attempt.id);
+      const add = db.prepare('INSERT INTO skill_assessment_answers(id,attempt_id,question_id,selected_option,created_at,updated_at) VALUES (?,?,?,?,?,?)');
+      for (const answer of normalized) add.run(newId(), attempt.id, answer.questionId, answer.selectedOption, timestamp, timestamp);
+      db.prepare("UPDATE skill_assessment_attempts SET submitted_at=?,status='SUBMITTED',updated_at=? WHERE id=? AND status='IN_PROGRESS'").run(timestamp, timestamp, attempt.id);
+    });
+    submit();
+    res.json({ attempt: studentAttempt(db, attempt.id) });
+  });
+  router.get('/company/assessments/:id/attempts', companyAuth, (req, res) => {
+    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    const attempts = db.prepare(`SELECT a.id,a.student_id AS studentId,a.started_at AS startedAt,a.submitted_at AS submittedAt,a.status,a.review_status AS reviewStatus,
+      a.manual_score AS manualScore,a.company_feedback AS companyFeedback,a.reviewed_at AS reviewedAt,s.full_name AS fullName,s.college
+      FROM skill_assessment_attempts a JOIN students s ON s.id=a.student_id WHERE a.assessment_id=? ORDER BY a.started_at DESC`).all(assessment.id);
+    res.json({ attempts });
+  });
+  router.get('/company/assessment-attempts/:id', companyAuth, (req, res) => {
+    const attempt = ownedAttempt(db, req.params.id, req.session.company_id);
+    res.json({ attempt: companyAttempt(db, attempt.id) });
+  });
+  router.put('/company/assessment-attempts/:id/evaluation', companyAuth, (req, res) => {
+    const attempt = ownedAttempt(db, req.params.id, req.session.company_id);
+    if (!attempt.submitted_at) throw new InputError('Submit an assessment attempt before reviewing it.', 409);
+    const score = req.body?.manualScore == null || req.body.manualScore === '' ? null : Number(req.body.manualScore);
+    if (score != null && (!Number.isFinite(score) || score < 0 || score > 100)) throw new InputError('Manual score must be between 0 and 100.');
+    const feedback = optionalText(req.body?.companyFeedback, 'Company feedback', 5000);
+    const timestamp = nowIso();
+    db.prepare("UPDATE skill_assessment_attempts SET manual_score=?,company_feedback=?,review_status='REVIEWED',status='REVIEWED',reviewed_at=?,updated_at=? WHERE id=?")
+      .run(score, feedback, timestamp, timestamp, attempt.id);
+    res.json({ attempt: companyAttempt(db, attempt.id) });
+  });
+
+  // Company talent discovery uses indexed stored skills and returns the transparent overlap.
+  router.get('/company/talent', companyAuth, (req, res) => {
+    const requestedSkills = typeof req.query.skills === 'string' ? req.query.skills.split(',').map(value => text(value, 60)).filter(Boolean).slice(0, 20) : [];
+    const college = typeof req.query.college === 'string' ? text(req.query.college, 200) : '';
+    const clauses = [];
+    const params = [];
+    if (college) { clauses.push('s.college LIKE ? ESCAPE \'\\\' COLLATE NOCASE'); params.push(`%${college.replace(/[\\%_]/g, '\\$&')}%`); }
+    if (requestedSkills.length) {
+      clauses.push(`EXISTS (SELECT 1 FROM student_skills ss WHERE ss.student_id=s.id AND ss.skill IN (${requestedSkills.map(() => '?').join(',')} COLLATE NOCASE))`);
+      params.push(...requestedSkills);
+    }
+    const rows = db.prepare(`SELECT s.id FROM students s ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''} ORDER BY s.updated_at DESC LIMIT 100`).all(...params);
+    const students = rows.map(row => {
+      const profile = studentProfile(db, row.id, { includeResume: true });
+      const matchedSkills = requestedSkills.filter(skill => profile.skills.some(known => known.toLowerCase() === skill.toLowerCase()));
+      return { ...profile, matchedSkills, matchCount: matchedSkills.length };
+    }).sort((a, b) => b.matchCount - a.matchCount);
+    res.json({ students, matchBasis: requestedSkills.length ? 'Number of requested skills found on the profile; ties use most recently updated profile.' : 'Most recently updated student profiles.' });
+  });
+  router.get('/company/talent/:id', companyAuth, (req, res) => {
+    const profile = studentProfile(db, req.params.id, { includeResume: true });
+    if (!profile) throw new InputError('Student profile not found.', 404);
+    res.json({ profile });
+  });
+  router.get('/company/saved-students', companyAuth, (req, res) => {
+    const rows = db.prepare('SELECT student_id FROM saved_students WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
+    res.json({ students: rows.map(({ student_id: id }) => ({ ...studentProfile(db, id, { includeResume: true }), savedAt: db.prepare('SELECT created_at FROM saved_students WHERE company_id=? AND student_id=?').get(req.session.company_id, id).created_at })) });
+  });
+  router.post('/company/saved-students/:studentId', companyAuth, (req, res) => {
+    if (!db.prepare('SELECT 1 FROM students WHERE id=?').get(req.params.studentId)) throw new InputError('Student profile not found.', 404);
+    const note = optionalText(req.body?.note, 'Note', 1000); const timestamp = nowIso();
+    db.prepare(`INSERT INTO saved_students(company_id,student_id,note,created_at) VALUES (?,?,?,?)
+      ON CONFLICT(company_id,student_id) DO UPDATE SET note=excluded.note`).run(req.session.company_id, req.params.studentId, note, timestamp);
+    res.status(201).json({ saved: true });
+  });
+  router.delete('/company/saved-students/:studentId', companyAuth, (req, res) => {
+    const deleted = db.prepare('DELETE FROM saved_students WHERE company_id=? AND student_id=?').run(req.session.company_id, req.params.studentId);
+    if (!deleted.changes) throw new InputError('Saved student not found.', 404);
+    res.json({ saved: false });
+  });
+
+  return router;
+}
+
+function companyAssessment(db, id) {
+  const row = db.prepare('SELECT * FROM skill_assessments WHERE id=?').get(id);
+  return { id: row.id, title: row.title, description: row.description, relatedSkill: row.related_skill, instructions: row.instructions,
+    durationMinutes: row.duration_minutes, status: row.status, questions: db.prepare('SELECT id,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,correct_answer AS correctAnswer,question_order AS questionOrder FROM skill_assessment_questions WHERE assessment_id=? ORDER BY question_order').all(id) };
+}
+function companyQuestion(db, id) {
+  return db.prepare('SELECT id,assessment_id AS assessmentId,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,correct_answer AS correctAnswer,question_order AS questionOrder FROM skill_assessment_questions WHERE id=?').get(id);
+}
+function studentQuestions(db, assessmentId) {
+  return db.prepare('SELECT id,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,question_order AS questionOrder FROM skill_assessment_questions WHERE assessment_id=? ORDER BY question_order').all(assessmentId);
+}
+function studentAttempt(db, id) {
+  const row = db.prepare(`SELECT a.id,a.assessment_id AS assessmentId,a.started_at AS startedAt,a.submitted_at AS submittedAt,a.status,a.review_status AS reviewStatus,
+    a.manual_score AS manualScore,a.company_feedback AS companyFeedback,a.reviewed_at AS reviewedAt,s.title AS assessmentTitle,s.duration_minutes AS durationMinutes
+    FROM skill_assessment_attempts a JOIN skill_assessments s ON s.id=a.assessment_id WHERE a.id=?`).get(id);
+  row.questions = studentQuestions(db, row.assessmentId).map(question => ({ ...question, selectedOption: db.prepare('SELECT selected_option FROM skill_assessment_answers WHERE attempt_id=? AND question_id=?').get(id, question.id)?.selected_option || null }));
+  return row;
+}
+function companyAttempt(db, id) {
+  const row = db.prepare(`SELECT a.id,a.assessment_id AS assessmentId,a.student_id AS studentId,a.started_at AS startedAt,a.submitted_at AS submittedAt,a.status,a.review_status AS reviewStatus,
+    a.manual_score AS manualScore,a.company_feedback AS companyFeedback,a.reviewed_at AS reviewedAt,s.full_name AS fullName,s.college
+    FROM skill_assessment_attempts a JOIN students s ON s.id=a.student_id WHERE a.id=?`).get(id);
+  row.questions = db.prepare(`SELECT q.id,q.question_text AS questionText,q.option_a AS optionA,q.option_b AS optionB,q.option_c AS optionC,q.option_d AS optionD,
+    q.correct_answer AS correctAnswer,q.question_order AS questionOrder,aa.selected_option AS selectedOption FROM skill_assessment_questions q
+    LEFT JOIN skill_assessment_answers aa ON aa.question_id=q.id AND aa.attempt_id=? WHERE q.assessment_id=? ORDER BY q.question_order`).all(id, row.assessmentId);
+  return row;
+}
+function ownedAssessment(db, id, companyId) {
+  const assessment = db.prepare('SELECT * FROM skill_assessments WHERE id=? AND company_id=?').get(id, companyId);
+  if (!assessment) throw new InputError('Assessment not found.', 404);
+  return assessment;
+}
+function ownedAttempt(db, id, companyId) {
+  const attempt = db.prepare(`SELECT a.* FROM skill_assessment_attempts a JOIN skill_assessments s ON s.id=a.assessment_id
+    WHERE a.id=? AND s.company_id=?`).get(id, companyId);
+  if (!attempt) throw new InputError('Assessment attempt not found.', 404);
+  return attempt;
+}

@@ -35,6 +35,12 @@ export function sendOtpEmail({ to, contactName, companyName, otp }) {
     text: `Hello ${contactName}, your OSF verification code is ${otp}. It expires in five minutes.` });
 }
 
+export function sendStudentOtpEmail({ to, otp }) {
+  return send({ to, subject: 'Verify Your OSF Student Email', title: 'Verify your student email',
+    bodyHtml: `<p>Use this code to verify your email address for your OSF student account.</p><p style="font-size:30px;letter-spacing:8px;font-weight:bold;background:#f2f5f8;padding:14px;text-align:center">${otp}</p><p>This code expires in five minutes. Ignore this email if you did not start registration.</p>`,
+    text: `Your OSF student account verification code is ${otp}. It expires in five minutes.` });
+}
+
 export function sendSetupEmail({ to, contactName, companyName, userId, setupUrl }) {
   const url = escapeHtml(setupUrl);
   return send({ to, subject: 'Set Up Your OSF Company Account', title: 'Your email is verified',
