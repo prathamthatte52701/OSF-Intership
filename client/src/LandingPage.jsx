@@ -47,9 +47,9 @@ const journey = [
 ];
 
 const ecosystem = [
-  { icon: 'rocket', title: 'Hackathons & Innovation', text: 'Organizing large-scale innovation events connecting students with real-world opportunities.', link: '#hackathon', action: 'Learn more' },
+  { icon: 'rocket', title: 'Hackathons & Innovation', text: 'Explore events where students can build projects and connect with others.', link: '#hackathon', action: 'Learn more' },
   { icon: 'briefcase', title: 'Freelance Ecosystem', text: 'Helping verified freelancers and creators connect with startups and businesses.', link: '#opportunities', action: 'Learn more' },
-  { icon: 'building', title: 'Startup Collaboration', text: 'Enabling startups to hire, build, scale and innovate faster.', link: '#business', action: 'Learn more' },
+  { icon: 'building', title: 'Startup Collaboration', text: 'Explore ways for startups to connect with talent and ideas.', link: '#business', action: 'Learn more' },
   { icon: 'graduation', title: 'Student Opportunities', text: 'Providing internships, mentorship, networking and career-building opportunities.', link: '#opportunities', action: 'Learn more' },
 ];
 
@@ -63,36 +63,36 @@ const workshopFeatures = [
 const tracks = ['Artificial Intelligence / ML', 'Web3 & Blockchain', 'Cybersecurity & Infra', 'Cross-Platform Apps'];
 
 const opportunityTypes = [
-  { icon: 'briefcase', title: 'Full-Time Jobs', text: ['Direct hiring by participating companies', 'Roles across tech, design, marketing & more', 'No placement agent fees — ever'] },
-  { icon: 'graduation', title: 'Paid Internships', text: ['3 to 6 month structured internships', 'From startups to large organisations', 'Stipend + certificate + mentorship'] },
-  { icon: 'rocket', title: 'Freelance Projects', text: ['Short-term gigs with direct client access', 'AI-verified work — instant UPI payouts', 'Build your portfolio while still studying'] },
+  { icon: 'briefcase', title: 'Full-Time Jobs', text: ['Explore roles across tech, design, marketing & more', 'Learn about opportunities shared with OSF'] },
+  { icon: 'graduation', title: 'Internships', text: ['Explore internship opportunities', 'Build experience with organisations'] },
+  { icon: 'rocket', title: 'Freelance Projects', text: ['Short-term projects with direct client access', 'Build your portfolio while still studying'] },
 ];
 
 const hackathonBenefits = [
   ['code', 'Build Real Products', 'Go beyond theoretical coding and build dynamic, functional MVPs that tackle actual workspace and domain issues.'],
   ['people', 'Meet Recruiters', 'Pitch your design skills and engineering talent directly to high-growth startups and standard hiring partners.'],
-  ['trophy', 'Win Cash Prizes', 'Compete for national level recognition, certificates, and exciting cash prizes from our stellar reward pool.'],
-  ['graduation', 'Get Internship Opportunities', 'Get evaluated by partner organizations for paid engineering internships and part-time freelance projects.'],
-  ['spark', 'Startup Exposure', 'Present high-grade prototypes to incubator cells, angel networks, and veteran venture builders.'],
+  ['trophy', 'Show Your Work', 'Present a project and share what you learned.'],
+  ['graduation', 'Explore Career Paths', 'Use projects and events to explore roles, internships and freelance work.'],
+  ['spark', 'Share Your Ideas', 'Present project ideas and connect with other builders.'],
   ['globe', 'Network With Developers', 'Team up and exchange insights with hundreds of exceptional developers, computer science majors, and designers.'],
 ];
 
 const communities = [
   ['code', 'Coding Clubs', 'Empowering college coding standard groups to build tomorrow’s software.'],
   ['spark', 'Startup Communities', 'Nurturing early-stage networks of student founders and startup builders.'],
-  ['people', 'Student Ambassadors', 'OSF campus leaders driving awareness across universities and technical engineering colleges.'],
+  ['people', 'Student Communities', 'Connect with students across universities and technical communities.'],
   ['building', 'College Innovation Cells', 'Colleges providing incubation support, technical guidance, and administrative cells.'],
   ['shield', 'Developer Communities', 'Uniting passionate open-source coders, web builders, cybersecurity pros, and AI engineers.'],
 ];
 
 const businessFeatures = [
-  ['shield', 'GST Invoicing', 'Hassle-free business billing. Claim input tax credits with automated INR invoices natively.'],
-  ['check', 'Vetted On-Tap', 'Access talent vetted by proctored exams, cutting your hiring cycle from weeks to minutes.'],
-  ['people', 'Safety First', 'Secure escrow means you only pay when the work matches your high professional standards.'],
+  ['shield', 'Business Billing', 'Manage billing for your organisation in one place.'],
+  ['check', 'Talent Discovery', 'Find candidates whose skills align with your hiring needs.'],
+  ['people', 'Clear Agreements', 'Set project expectations and payment terms before work begins.'],
 ];
 
 const indiaFeatures = [
-  ['payment', 'Instant UPI', 'Payments reach you in seconds—not weeks.'],
+  ['payment', 'India-Ready Payments', 'Payment options designed for work across India.'],
   ['graduation', 'Campus-to-Career', 'Launch your career with paid student internships.'],
   ['people', 'Indore City Clubs', 'Network offline in Madhya Pradesh and beyond.'],
 ];
@@ -148,15 +148,14 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
               <a className="landing-button landing-button-outline-dark" href="#business">For Businesses</a>
             </div>
             <div className="landing-hero-proof" aria-label="OSF network facts">
-              <span>5,000+ students</span><span>OSF Hackathon 2026</span><span>Pan-India network</span><span>Global companies</span><span>Freelance ecosystem</span><span>Verified talent</span>
+              <span>Student opportunities</span><span>OSF Hackathon 2026</span><span>Pan-India network</span><span>Freelance ecosystem</span>
             </div>
             <div className="landing-proof-strip" aria-label="Our Startup Freelancer network facts">
-              <article><span className="landing-metric-icon"><LandingIcon name="people" size={18} /></span><div><strong>5,000+</strong><small>Students network</small><em>Pan-India reach</em></div></article>
-              <article><span className="landing-metric-icon"><LandingIcon name="building" size={18} /></span><div><strong>100+</strong><small>Colleges</small><em>Tier 1, 2 & 3 cities</em></div></article>
-              <article><span className="landing-metric-icon"><LandingIcon name="globe" size={18} /></span><div><strong>28</strong><small>States covered</small><em>National-level reach</em></div></article>
-              <article><span className="landing-metric-icon"><LandingIcon name="star" size={18} /></span><div><strong>₹0</strong><small>Cost to students</small><em>Always free to join</em></div></article>
+              <article><span className="landing-metric-icon"><LandingIcon name="people" size={18} /></span><div><strong>Pan-India</strong><small>Student opportunities</small><em>Across communities</em></div></article>
+              <article><span className="landing-metric-icon"><LandingIcon name="building" size={18} /></span><div><strong>Skills</strong><small>Learning &amp; discovery</small><em>Build your profile</em></div></article>
+              <article><span className="landing-metric-icon"><LandingIcon name="globe" size={18} /></span><div><strong>Work</strong><small>Projects &amp; internships</small><em>Explore opportunities</em></div></article>
+              <article><span className="landing-metric-icon"><LandingIcon name="star" size={18} /></span><div><strong>Events</strong><small>Hackathons &amp; more</small><em>Join the community</em></div></article>
             </div>
-            <p className="landing-event-proof"><span aria-hidden="true">●</span> We successfully conducted a <a href="#hackathon">National-Level Hackathon</a> — 300+ teams · 28 states · 280 cities <b>OSF HackOne 2K26 verified</b></p>
           </div>
         </section>
 
@@ -186,7 +185,7 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
           <div className="landing-section-heading landing-centered">
             <p className="landing-eyebrow"><span /> POWERED BY OUR STARTUP FREELANCER</p>
             <h2 id="ecosystem-title">Building India’s Innovation Ecosystem</h2>
-            <p>Our Startup Freelancer is building opportunities for students, developers, startups, creators and future founders through hackathons, freelance work, AI-powered hiring and startup collaboration.</p>
+            <p>Our Startup Freelancer brings together students, developers, startups and creators through events, freelance work and startup collaboration.</p>
           </div>
           <div className="landing-ecosystem-grid">
             {ecosystem.map((item, i) => (
@@ -216,10 +215,10 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
             <p className="landing-eyebrow landing-eyebrow-pill"><span className="landing-eyebrow-dot" /> OUR STARTUP FREELANCER PRESENTS OSF HACKATHON</p>
             <h2 id="hackathon-title">OSF Hackathon 2026</h2>
             <h3>National-Level Engineering &amp; Innovation Championship</h3>
-            <p>Step into India’s premier launchpad for technical brilliance. Design codebases, challenge traditional templates, build industry-grade prototypes, and collaborate under the official vision of Our Startup Freelancer.</p>
+            <p>Take part in a technical and innovation event: collaborate with a team, build a project and share your work.</p>
           </div>
           <div className="landing-hackathon-stats" aria-label="OSF Hackathon facts">
-            <div><strong>5000+</strong><span>Active students</span></div><div><strong>100+</strong><span>Colleges</span></div><div><strong>48 Hours</strong><span>Innovation</span></div><div><strong>₹50k+</strong><span>Rewards</span></div>
+            <div><strong>Build</strong><span>Team projects</span></div><div><strong>Learn</strong><span>New skills</span></div><div><strong>Present</strong><span>Share your work</span></div><div><strong>Connect</strong><span>Meet the community</span></div>
           </div>
           <div className="landing-hackathon-panels">
             <article className="landing-track-panel">
@@ -227,43 +226,39 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
               <div className="landing-track-list">{tracks.map(track => <span key={track}><i />{track}</span>)}</div>
               <div className="landing-benefit-list">
                 {[
-                  ['graduation', 'Internship Placements', 'Get fast-track evaluation rounds with elite tech corporations, startup ecosystems, and business founders looking for dynamic coders.'],
-                  ['spark', 'Startup Incubation Opportunity', 'Winner ideas get direct support, mentorship support structure, and potential project funding from Our Startup Freelancer angel networks.'],
-                  ['trophy', 'National-Level Recognition', 'Acquire official credentials, a digital shareable showcase badge, and a Certificate of Innovation endorsed by national industry leaders.'],
+                  ['graduation', 'Explore Opportunities', 'Learn about roles, internships and projects shared with the OSF community.'],
+                  ['spark', 'Share Your Project', 'Build a prototype and present your idea to other participants.'],
+                  ['trophy', 'Take Part', 'Collaborate with a team and learn through the event.'],
                 ].map(([icon, title, text]) => <div key={title}><span><LandingIcon name={icon} size={15} /></span><p><strong>{title}</strong><small>{text}</small></p></div>)}
               </div>
               <p className="landing-panel-footnote">Powered by Our Startup Freelancer evaluation systems</p>
             </article>
             <article className="landing-prize-panel">
               <span className="landing-prize-mark"><LandingIcon name="trophy" size={24} /></span>
-              <p className="landing-eyebrow landing-eyebrow-pill"><span className="landing-eyebrow-dot" /> GRAND REWARD POOL</p>
-              <h3>₹50,000+ Prize Package</h3>
-              <p>Alongside direct cash rewards, qualifying participants receive credit assessments, student ambassador invitations, customized swag kits, and premium proctored credentials.</p>
-              <strong className="landing-rewards-title">Participation rewards</strong>
+              <p className="landing-eyebrow landing-eyebrow-pill"><span className="landing-eyebrow-dot" /> FOR PARTICIPANTS</p>
+              <h3>Build &amp; Present Your Work</h3>
+              <p>Collaborate on a project, share what you build and connect with the OSF community.</p>
+              <strong className="landing-rewards-title">What to expect</strong>
               <ul>
-                <li><LandingIcon name="check" size={14} /> Official Certificate of Accomplishment</li>
-                <li><LandingIcon name="check" size={14} /> Free Entry to OSF Freelance Elite Assessment Club</li>
-                <li><LandingIcon name="check" size={14} /> Exclusive Developer Mentorship Sessions Max 48h</li>
-                <li><LandingIcon name="check" size={14} /> Access to Verified INR Project Contracts</li>
+                <li><LandingIcon name="check" size={14} /> Work with a team</li>
+                <li><LandingIcon name="check" size={14} /> Explore new ideas</li>
+                <li><LandingIcon name="check" size={14} /> Present a project</li>
               </ul>
-              <a className="landing-button landing-button-dark" href="https://osfhackathon.in/" target="_blank" rel="noreferrer">Register for OSF Hackathon <LandingIcon name="arrow" size={15} /></a>
-              <small className="landing-registration-note">Open Pan-India</small>
+              <a className="landing-button landing-button-dark" href="https://osfhackathon.in/" target="_blank" rel="noreferrer">OSF Hackathon Website <LandingIcon name="arrow" size={15} /></a>
             </article>
           </div>
         </section>
 
         <section className="landing-event-reveal landing-section" id="event-announcement" aria-labelledby="event-reveal-title">
           <div className="landing-section-heading landing-centered">
-            <p className="landing-eyebrow landing-eyebrow-outline"><span /> SOMETHING BIG IS COMING</p>
-            <h2 id="event-reveal-title">The Event Name<br /><span>Will Be Revealed Soon.</span></h2>
-            <p>Our Startup Freelancer is preparing something India’s student community has never seen before — a national-level event bringing students, global companies, and real opportunities under one roof.</p>
+            <p className="landing-eyebrow landing-eyebrow-outline"><span /> UPCOMING OSF EVENT</p>
+            <h2 id="event-reveal-title">Event Details<br /><span>Coming Soon.</span></h2>
+            <p>OSF is preparing an event for students and teams. The name, date and venue have not been announced here yet.</p>
           </div>
-          <div className="landing-event-mystery">{['Event name', 'Date', 'Venue', 'Surprise'].map(label => <div key={label}><strong>??</strong><span>{label}</span></div>)}</div>
-          <p className="landing-event-note">Stay tuned — announcement dropping soon</p>
           <div className="landing-global-phases" aria-label="Event announcement rollout">
-            <article className="is-complete"><span>✓</span><small>Phase 01</small><strong>Internal Team Briefing</strong></article>
-            <article className="is-active"><span>↻</span><small>Phase 02</small><strong>Campus Ambassador Rollout</strong><em>Live now</em></article>
-            <article><span><LandingIcon name="globe" size={19} /></span><small>Phase 03</small><strong>Public Global Announcement</strong></article>
+            <article><span><LandingIcon name="people" size={19} /></span><strong>For students</strong></article>
+            <article><span><LandingIcon name="building" size={19} /></span><strong>For teams</strong></article>
+            <article><span><LandingIcon name="globe" size={19} /></span><strong>Across India</strong></article>
           </div>
         </section>
 
@@ -280,7 +275,7 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
                 <ul>{item.text.map(line => <li key={line}>{line}</li>)}</ul>
               </article>)}
             </div>
-            <div className="landing-opportunity-stats"><div><strong>5,000+</strong><span>Students participating</span></div><div><strong>100+</strong><span>Colleges represented</span></div><div><strong>Pan-India</strong><span>Geographic reach</span></div><div><strong>₹0</strong><span>Cost to students</span></div></div>
+            <div className="landing-opportunity-stats"><div><strong>Jobs</strong><span>Explore roles</span></div><div><strong>Internships</strong><span>Gain experience</span></div><div><strong>Projects</strong><span>Build your portfolio</span></div><div><strong>Events</strong><span>Meet and collaborate</span></div></div>
           </div>
         </section>
 
@@ -297,15 +292,15 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
           <div className="landing-trust-copy">
             <p className="landing-eyebrow"><span /> BUILT FOR INDIA’S FREELANCERS</p>
             <h2 id="trust-title">Ditch the Bidding Wars.<br /><span>Work Smarter.</span></h2>
-            <article><span className="landing-icon-tile"><LandingIcon name="payment" /></span><div><h3>Instant UPI Payouts</h3><p>First payout possible within days. No 14-day hold. Funds hit your bank account as soon as the work is approved. Built for India’s banking speed.</p></div></article>
-            <article><span className="landing-icon-tile"><LandingIcon name="shield" /></span><div><h3>AI-Verified Trust Score</h3><p>Verified freelancers are hired 3x faster. Our AI assessments eliminate fake profiles, ensuring you get paid for your real expertise.</p></div></article>
+            <article><span className="landing-icon-tile"><LandingIcon name="payment" /></span><div><h3>Payment Clarity</h3><p>Agree on payment terms and milestones with clients before a project starts.</p></div></article>
+            <article><span className="landing-icon-tile"><LandingIcon name="shield" /></span><div><h3>Showcase Your Skills</h3><p>Build a profile that helps potential clients understand your experience and work.</p></div></article>
           </div>
           <div className="landing-trust-card" aria-label="OSF skill verification product preview">
-            <div className="landing-trust-card-top"><span>● ● ●</span><strong>OSF ENGINE V3.1</strong></div>
-            <p className="landing-trust-label">Neural matchmaker</p><h3>High Probability</h3>
-            <p>Matching your verified Python skills with active project “NeoFintech”.</p>
-            <div className="landing-trust-metrics"><div><small>Skill rating</small><strong>A++ <em>Global</em></strong></div><div><small>Verification</small><strong className="landing-verified">Passed</strong></div></div>
-            <div className="landing-rate"><span>AI rate suggestion</span><strong>₹3,500 – ₹5,000 / Hour</strong></div>
+            <div className="landing-trust-card-top"><span>● ● ●</span><strong>YOUR PROFILE</strong></div>
+            <p className="landing-trust-label">Skills and experience</p><h3>Show what you can do</h3>
+            <p>Keep your experience and project work together in one place.</p>
+            <div className="landing-trust-metrics"><div><small>Skills</small><strong>Profile</strong></div><div><small>Work</small><strong>Projects</strong></div></div>
+            <div className="landing-rate"><span>Next step</span><strong>Explore opportunities</strong></div>
           </div>
         </section>
 
@@ -316,9 +311,9 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
           </div>
           <div className="landing-process-grid">
             {[
-              ['Learn & Verify', 'No experience? Take mini-courses and pass our AI-proctored tests to earn your first Verified OSF Badge.', 'shield'],
+              ['Learn & Grow', 'Explore learning resources and build skills for your next opportunity.', 'shield'],
               ['Get AI-Matched', 'Stop wasting time bidding. Our algorithms find the projects where you have the highest chance of winning instantly.', 'spark'],
-              ['Earn via UPI', 'Deliver work via our secure escrow system and withdraw your earnings instantly to your bank account using UPI.', 'payment'],
+              ['Work & Grow', 'Take on projects, build experience and grow your professional profile.', 'payment'],
             ].map(([title, text, icon], i) => <article className="landing-process-card" key={title}>
               <span className="landing-process-number">0{i + 1}</span><span className="landing-icon-tile"><LandingIcon name={icon} /></span><div><h3>{title}</h3><p>{text}</p></div>
             </article>)}
@@ -338,11 +333,11 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
           <div className="landing-language-copy">
             <p className="landing-eyebrow landing-eyebrow-outline"><span /> TRULY INCLUSIVE INDIA</p>
             <h2 id="language-title">Work in Your Language.</h2>
-            <p>Break the English barrier. OSF allows freelancers to collaborate in Hindi and regional languages natively. Our AI handles the professional translation for you.</p>
-            <div className="landing-language-support"><article><strong>Native job applications</strong><span>Apply in your local language—AI does the rest.</span></article><article><strong>Local support team</strong><span>Talk to humans who understand your context.</span></article></div>
+            <p>OSF aims to make collaboration more accessible across languages, including Hindi and other regional languages.</p>
+            <div className="landing-language-support"><article><strong>Regional languages</strong><span>Explore ways to collaborate in your preferred language.</span></article><article><strong>Local context</strong><span>Designed with India’s diverse communities in mind.</span></article></div>
           </div>
           <div className="landing-language-demo" aria-label="Example language translation">
-            <div><small>Freelancer input (Hindi)</small><p>“मैंने प्रोजेक्ट का डिजाइन पूरा कर लिया है, आप एक बार चेक कर लीजिये।”</p></div><span aria-hidden="true">↓</span><div><small>AI output (professional English)</small><p>“The project designs are finalized. Kindly review the updates at your convenience.”</p></div>
+            <div><small>Hindi example</small><p>“मैंने प्रोजेक्ट का डिजाइन पूरा कर लिया है, आप एक बार चेक कर लीजिये।”</p></div><span aria-hidden="true">↓</span><div><small>English example</small><p>“The project designs are finalized. Kindly review the updates at your convenience.”</p></div>
           </div>
         </section>
 
@@ -350,7 +345,7 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
           <div className="landing-business-intro">
             <p className="landing-eyebrow landing-eyebrow-outline"><span /> FOR BUSINESSES</p>
             <h2 id="business-title">Built for Indian Businesses.</h2>
-            <p>The most trust-focused way to hire verified talent in India. GST Invoices Included.</p>
+            <p>Discover talent and opportunities for businesses across India.</p>
             <a className="landing-button landing-button-small" href="/register" onClick={route('/register')}>Explore for Businesses <LandingIcon name="arrow" size={14} /></a>
           </div>
           <div className="landing-business-grid">{businessFeatures.map(([icon, title, text]) => <article key={title}><span className="landing-icon-tile"><LandingIcon name={icon} /></span><h3>{title}</h3><p>{text}</p></article>)}</div>
@@ -361,7 +356,7 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
             <p className="landing-eyebrow landing-eyebrow-pill"><span className="landing-eyebrow-dot" /> GLOBAL STANDARDS</p>
             <h2 id="india-first-title">The India-First Ecosystem</h2>
             <p>High-trust freelancing for the world, from the heart of Indore.</p>
-            <article><strong>Your Trust Score</strong><p>Verified freelancers with scores above 80 get hired 4x faster and earn higher project rates.</p><div><strong>89</strong><span>Elite tier status</span></div></article>
+            <article><strong>Your Profile</strong><p>Bring your skills and experience together in one place.</p><div><strong>OSF</strong><span>Talent network</span></div></article>
           </div>
           <div className="landing-india-grid">{indiaFeatures.map(([icon, title, text]) => <article key={title}><span className="landing-icon-tile"><LandingIcon name={icon} /></span><h3>{title}</h3><p>{text}</p></article>)}</div>
         </section>
@@ -369,10 +364,9 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
         <section className="landing-final landing-section" aria-labelledby="final-title">
           <p className="landing-eyebrow landing-eyebrow-pill"><span className="landing-eyebrow-dot" /> INDIA’S YOUTH INNOVATION CHAMPIONSHIP 2026</p>
           <h2 id="final-title">Ready To Build The Future?</h2>
-          <p>Join OSF Hackathon and become part of India’s next generation of innovators. Showcase your talent to high-growth startups and win ₹50k+ rewards.</p>
+          <p>Join the OSF community to explore events, build projects and connect with other innovators.</p>
           <div className="landing-final-actions">
             <a className="landing-button landing-button-light" href="https://osfhackathon.in/" target="_blank" rel="noreferrer">Register Now <LandingIcon name="arrow" size={16} /></a>
-            <a className="landing-button landing-button-outline-light" href="https://osfhackathon.in/campus-ambassador" target="_blank" rel="noreferrer">Become Campus Ambassador</a>
           </div>
         </section>
       </main>
