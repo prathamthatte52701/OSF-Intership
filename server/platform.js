@@ -7,6 +7,7 @@ import { basename, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { InputError } from './validation.js';
+import { challengeOwnedByCompany } from './repositories/challengeOwnership.js';
 import { hashOtp, hashPassword, newId, newOtp, newSecret, otpMatches, sha256, validatePassword, verifyPassword } from './security.js';
 import { sendStudentOtpEmail, sendStudentPasswordResetEmail } from './mail.js';
 import { failedLoginLimiter, loginBlockedMessage, sendTooMany } from './rateLimits.js';
@@ -237,8 +238,7 @@ function validateChallenge(input, current = null) {
 function challengeSkills(db, challengeId) {
   return db.prepare('SELECT skill FROM challenge_skills WHERE challenge_id=? ORDER BY skill COLLATE NOCASE').all(challengeId).map(row => row.skill);
 }
-function challengeView(db, challenge) {
-  const row = { ...challenge, requiredSkills: challengeSkills(db, challenge.id) };
+function challengeView(row) { // row comes from the challenges repository (already carries requiredSkills)
   return {
     id: row.id, companyId: row.company_id,
     ...(row.company_name == null ? {} : { companyName: row.company_name }),
@@ -251,7 +251,7 @@ function challengeView(db, challenge) {
   };
 }
 
-export function createPlatformRouter({ db, requireCompanyAuth }) {
+export function createPlatformRouter({ db, requireCompanyAuth, challenges }) {
   const router = express.Router();
   const studentAuth = requireStudent(db);
   const companyAuth = requireCompanyAuth;
@@ -485,27 +485,18 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
 
   // Students can see published challenges and apply only during the public window.
-  router.get('/challenges', (req, res) => {
+  router.get('/challenges', asyncRoute(async (req, res) => {
     const skills = typeof req.query.skills === 'string' ? req.query.skills.split(',').map(value => text(value, 60)).filter(Boolean).slice(0, 20) : [];
-    const clauses = ["c.status='PUBLISHED'", 'c.application_opens_at<=?', 'c.application_closes_at>=?'];
-    const nowStamp = nowIso();
-    const params = [nowStamp, nowStamp];
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 100);
     const offset = Math.max(Number.parseInt(req.query.offset, 10) || 0, 0);
-    if (skills.length) {
-      clauses.push(`EXISTS (SELECT 1 FROM challenge_skills cs WHERE cs.challenge_id=c.id AND cs.skill IN (${skills.map(() => '?').join(',')} COLLATE NOCASE))`);
-      params.push(...skills);
-    }
-    const rows = db.prepare(`SELECT c.*,co.company_name AS company_name FROM challenges c
-      JOIN companies co ON co.id=c.company_id WHERE ${clauses.join(' AND ')} ORDER BY c.application_closes_at ASC LIMIT ? OFFSET ?`).all(...params, limit, offset);
-    res.json({ challenges: rows.map(row => challengeView(db, row)) });
-  });
-  router.get('/challenges/:id', (req, res) => {
-    const row = db.prepare(`SELECT c.*,co.company_name AS company_name FROM challenges c
-      JOIN companies co ON co.id=c.company_id WHERE c.id=? AND c.status='PUBLISHED'`).get(req.params.id);
+    const rows = await challenges.listPublicOpen({ skills, now: nowIso(), limit, offset });
+    res.json({ challenges: rows.map(challengeView) });
+  }));
+  router.get('/challenges/:id', asyncRoute(async (req, res) => {
+    const row = await challenges.getPublic(req.params.id);
     if (!row) throw new InputError('Challenge not found.', 404);
-    res.json({ challenge: challengeView(db, row) });
-  });
+    res.json({ challenge: challengeView(row) });
+  }));
   router.post('/student/challenges/:id/applications', studentAuth, (req, res) => {
     if (!req.student.student_id) throw new InputError('Complete your student profile before applying.', 409);
     const challenge = db.prepare("SELECT * FROM challenges WHERE id=? AND status='PUBLISHED'").get(req.params.id);
@@ -551,55 +542,35 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
 
   // Company-owned challenge management.
-  router.post('/company/challenges', companyAuth, (req, res) => {
+  router.post('/company/challenges', companyAuth, asyncRoute(async (req, res) => {
     const challenge = validateChallenge(req.body || {});
-    const id = newId(); const timestamp = nowIso();
-    const create = db.transaction(() => {
-      db.prepare(`INSERT INTO challenges(id,company_id,role_title,reference,task_description,language,extra_information,is_paid,compensation_details,candidate_count,
-        application_opens_at,application_closes_at,individual_task_duration_days,status,created_at,updated_at)
-        VALUES (@id,@companyId,@roleTitle,@reference,@taskDescription,@language,@extraInformation,@isPaid,@compensationDetails,@candidateCount,
-        @applicationOpensAt,@applicationClosesAt,@individualTaskDurationDays,'DRAFT',@timestamp,@timestamp)`)
-        .run({ ...challenge, id, companyId: req.session.company_id, timestamp });
-      const insert = db.prepare('INSERT INTO challenge_skills(id,challenge_id,skill,created_at) VALUES (?,?,?,?)');
-      for (const skill of challenge.requiredSkills) insert.run(newId(), id, skill, timestamp);
-    });
-    create();
-    res.status(201).json({ challenge: challengeView(db, db.prepare('SELECT * FROM challenges WHERE id=?').get(id)) });
-  });
-  router.get('/company/challenges', companyAuth, (req, res) => {
-    const rows = db.prepare('SELECT * FROM challenges WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
-    res.json({ challenges: rows.map(row => ({ ...challengeView(db, row), applicationCount: db.prepare('SELECT COUNT(*) AS count FROM applications WHERE challenge_id=?').get(row.id).count })) });
-  });
-  router.put('/company/challenges/:id', companyAuth, (req, res) => {
-    const existing = ownedChallenge(db, req.params.id, req.session.company_id);
+    const created = await challenges.create(challenge, newId(), req.session.company_id, nowIso());
+    res.status(201).json({ challenge: challengeView(created) });
+  }));
+  router.get('/company/challenges', companyAuth, asyncRoute(async (req, res) => {
+    const rows = await challenges.listForCompany(req.session.company_id);
+    res.json({ challenges: rows.map(row => ({ ...challengeView(row), applicationCount: row.applicationCount })) });
+  }));
+  router.put('/company/challenges/:id', companyAuth, asyncRoute(async (req, res) => {
+    const existing = await challengeOwnedByCompany(challenges, req.params.id, req.session.company_id);
     if (existing.status !== 'DRAFT') throw new InputError('Only draft challenges can be edited.', 409);
-    const challenge = validateChallenge(req.body || {}, { ...existing, requiredSkills: challengeSkills(db, existing.id) });
-    const timestamp = nowIso();
-    const save = db.transaction(() => {
-      db.prepare(`UPDATE challenges SET role_title=@roleTitle,reference=@reference,task_description=@taskDescription,language=@language,
-        extra_information=@extraInformation,is_paid=@isPaid,compensation_details=@compensationDetails,candidate_count=@candidateCount,
-        application_opens_at=@applicationOpensAt,application_closes_at=@applicationClosesAt,individual_task_duration_days=@individualTaskDurationDays,updated_at=@timestamp
-        WHERE id=@id AND company_id=@companyId`).run({ ...challenge, timestamp, id: existing.id, companyId: req.session.company_id });
-      db.prepare('DELETE FROM challenge_skills WHERE challenge_id=?').run(existing.id);
-      const insert = db.prepare('INSERT INTO challenge_skills(id,challenge_id,skill,created_at) VALUES (?,?,?,?)');
-      for (const skill of challenge.requiredSkills) insert.run(newId(), existing.id, skill, timestamp);
-    });
-    save();
-    res.json({ challenge: challengeView(db, db.prepare('SELECT * FROM challenges WHERE id=?').get(existing.id)) });
-  });
-  router.post('/company/challenges/:id/publish', companyAuth, (req, res) => {
-    const challenge = ownedChallenge(db, req.params.id, req.session.company_id);
+    const challenge = validateChallenge(req.body || {}, existing);
+    const updated = await challenges.updateIfDraft(existing.id, req.session.company_id, challenge, nowIso());
+    if (!updated) throw new InputError('Only draft challenges can be edited.', 409); // published/closed between the check and the write
+    res.json({ challenge: challengeView(updated) });
+  }));
+  router.post('/company/challenges/:id/publish', companyAuth, asyncRoute(async (req, res) => {
+    const challenge = await challengeOwnedByCompany(challenges, req.params.id, req.session.company_id);
     if (challenge.status === 'CLOSED') throw new InputError('A closed challenge cannot be published again.', 409);
-    if (!challengeSkills(db, challenge.id).length) throw new InputError('Add at least one required skill before publishing.');
+    if (!challenge.requiredSkills.length) throw new InputError('Add at least one required skill before publishing.');
     if (Date.parse(challenge.application_closes_at) < nowMs()) throw new InputError('The application window has already closed.');
-    db.prepare("UPDATE challenges SET status='PUBLISHED',updated_at=? WHERE id=? AND company_id=?").run(nowIso(), challenge.id, req.session.company_id);
-    res.json({ challenge: challengeView(db, db.prepare('SELECT * FROM challenges WHERE id=?').get(challenge.id)) });
-  });
-  router.post('/company/challenges/:id/close', companyAuth, (req, res) => {
-    const challenge = ownedChallenge(db, req.params.id, req.session.company_id);
-    db.prepare("UPDATE challenges SET status='CLOSED',updated_at=? WHERE id=?").run(nowIso(), challenge.id);
+    res.json({ challenge: challengeView(await challenges.publish(challenge.id, req.session.company_id, nowIso())) });
+  }));
+  router.post('/company/challenges/:id/close', companyAuth, asyncRoute(async (req, res) => {
+    const challenge = await challengeOwnedByCompany(challenges, req.params.id, req.session.company_id);
+    await challenges.close(challenge.id, req.session.company_id, nowIso());
     res.json({ closed: true });
-  });
+  }));
 
   // Company applicant, submission, and evaluation views always join through owned challenges.
   router.get('/company/challenges/:id/applications', companyAuth, (req, res) => {
