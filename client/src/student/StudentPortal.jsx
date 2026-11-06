@@ -3,8 +3,10 @@ import { studentApi } from './studentApi.js';
 import { errorMessage, LoadingState, StudentIcon } from './StudentUI.jsx';
 import {
   ApplicationDetailsPage, ExploreChallengesPage, ChallengeDetailsPage, SkillVerificationPage,
-  AssessmentPage, MyApplicationsPage, StudentOverviewPage, StudentProfilePage, StudentSettingsPage,
+  AssessmentPage, MyApplicationsPage, StudentOverviewPage, StudentProfilePage,
 } from './StudentPages.jsx';
+import { StudentSettingsPage } from './StudentSettings.jsx';
+import StudentForgotPasswordPage from './StudentForgotPassword.jsx';
 import './student.css';
 
 const menu = [
@@ -16,7 +18,7 @@ const menu = [
   { label: 'Settings', path: '/student/settings', icon: 'settings' },
 ];
 
-const authPaths = new Set(['/student/login', '/student/register', '/student/verify-email']);
+const authPaths = new Set(['/student/login', '/student/register', '/student/verify-email', '/student/forgot-password']);
 
 export default function StudentPortal({ path, go }) {
   const [session, setSession] = useState(null);
@@ -74,6 +76,7 @@ export default function StudentPortal({ path, go }) {
   if (sessionLoading) return <div className="student-root"><LoadingState label="Checking your student session…" /></div>;
   if (sessionError) return <div className="student-root"><div className="student-auth-wrap"><div className="student-auth-card"><img className="student-auth-logo" src="/landing/osf-brand.png" alt="Our Startup Freelancer" /><h1>Student Portal</h1><p className="student-muted">We couldn’t check your session right now.</p><div className="student-alert student-alert-error" role="alert">{sessionError}</div><button className="sp-button sp-button-primary sp-button-wide" onClick={() => { setSessionError(''); setSessionLoading(true); studentApi.session().then(setSession).catch(error => { if (error.status !== 401) setSessionError(errorMessage(error)); }).finally(() => setSessionLoading(false)); }}>Try again</button></div></div></div>;
 
+  if (!session && path === '/student/forgot-password') return <><StudentForgotPasswordPage go={go} notify={notify} />{notice && <div className={`student-toast student-toast-${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>{notice.message}</div>}</>;
   if (!session) {
     return <AuthPage path={path} go={go} onLogin={setSession} notify={notify} pendingEmail={pendingEmail} setPendingEmail={setPendingEmail} />;
   }
@@ -119,7 +122,7 @@ export default function StudentPortal({ path, go }) {
                       : path.startsWith('/student/applications/') ? <ApplicationDetailsPage applicationId={path.split('/')[3]} go={go} notify={notify} />
                         : path === '/student/skills' ? <SkillVerificationPage go={go} />
                           : path.startsWith('/student/assessments/') ? <AssessmentPage assessmentId={path.split('/')[3]} go={go} notify={notify} />
-                            : <StudentSettingsPage session={session} profile={profile} onLogout={logout} />}
+                            : <StudentSettingsPage session={session} profile={profile} onLogout={logout} onProfileSaved={updateProfile} notify={notify} />}
           </main>
           <footer className="student-footer"><span>© {new Date().getFullYear()} Our Startup Freelancer</span><span>Build · Launch · Scale</span></footer>
         </div>
