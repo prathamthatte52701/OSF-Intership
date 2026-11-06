@@ -242,6 +242,20 @@ a:hover {
   background-color: var(--bg-page);
 }
 
+@media (min-width: 901px) {
+  .dashboard-shell {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+}
+@container osf-app (min-width: 901px) {
+  .dashboard-shell {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+
 /* ==========================================================================
    DESKTOP BRAND PANEL
    ========================================================================== */
@@ -1260,6 +1274,21 @@ a:hover {
   background-color: var(--bg-page);
 }
 
+@media (min-width: 901px) {
+  .dash-container {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+@container osf-app (min-width: 901px) {
+  .dash-container {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
 /* Left Sidebar */
 .dash-sidebar {
   position: sticky;
@@ -1273,6 +1302,31 @@ a:hover {
   padding: 24px 16px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   z-index: 20;
+}
+
+@media (min-width: 901px) {
+  .dash-sidebar {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+@container osf-app (min-width: 901px) {
+  .dash-sidebar { height: 100%; overflow: hidden; }
+}
+
+.dash-sidebar-top {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+@media (min-width: 901px) {
+  .dash-sidebar-top { overflow-y: auto; }
+}
+
+.dash-sidebar-footer {
+  flex-shrink: 0;
 }
 
 .dash-sidebar-brand {
@@ -1434,8 +1488,20 @@ a:hover {
   min-height: 100vh;
 }
 
+@media (min-width: 901px) {
+  .dash-main-area {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+@container osf-app (min-width: 901px) {
+  .dash-main-area { height: 100%; min-height: 0; overflow: hidden; }
+}
+
 .dash-header {
   height: 72px;
+  flex-shrink: 0;
   padding: 0 clamp(20px, 4vw, 48px);
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border-color);
@@ -1468,10 +1534,18 @@ a:hover {
 /* Dashboard Main Content */
 .dash-body {
   flex: 1;
-  padding: 36px clamp(20px, 4vw, 48px) 60px;
-  max-width: 1200px;
+  padding: 36px 24px 60px;
   width: 100%;
-  margin: 0 auto;
+}
+
+@media (min-width: 901px) {
+  .dash-body {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+@container osf-app (min-width: 901px) {
+  .dash-body { min-height: 0; overflow-y: auto; }
 }
 
 /* Welcome Row */

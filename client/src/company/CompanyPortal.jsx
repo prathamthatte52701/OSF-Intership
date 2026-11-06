@@ -71,7 +71,7 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
     <div className="dash-container">
       {/* Desktop Left Sidebar */}
       <aside className="dash-sidebar" aria-label="Company Workspace Navigation">
-        <div>
+        <div className="dash-sidebar-top">
           <a className="dash-sidebar-brand" href="/" aria-label="Return to OSF home" onClick={e => { e.preventDefault(); go('/'); }}>
             <img src="/osf-logo.png" alt="OSF Logo" />
           </a>
