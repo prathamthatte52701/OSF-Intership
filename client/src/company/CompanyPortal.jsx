@@ -2,6 +2,9 @@ import React from 'react';
 import CompanyProfile from '../CompanyProfile.jsx';
 import LiveChallengePage from './LiveChallengePage.jsx';
 import ChallengeFormPage from './ChallengeFormPage.jsx';
+import ChallengeApplicantsPage from './ChallengeApplicantsPage.jsx';
+import ApplicationDetailPage from './ApplicationDetailPage.jsx';
+import CompanyStudentProfilePage from './CompanyStudentProfilePage.jsx';
 import { companyApi } from './companyApi.js';
 import './company.css';
 
@@ -37,6 +40,8 @@ const MODULES = [
 ];
 
 function moduleForPath(path) {
+  // applicant review pages live under the Live Challenge module
+  if (/^\/dashboard\/(applications|students)\/[^/]+$/.test(path)) return MODULES[0];
   return MODULES.find(item => path === item.path || path.startsWith(`${item.path}/`)) || null;
 }
 
@@ -186,6 +191,16 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
               go={go}
               challengeId={/^\/dashboard\/challenges\/([^/]+)\/edit$/.exec(path)?.[1] || null}
             />
+          )}
+
+          {/^\/dashboard\/challenges\/[^/]+\/applicants$/.test(path) && (
+            <ChallengeApplicantsPage go={go} challengeId={decodeURIComponent(/^\/dashboard\/challenges\/([^/]+)\/applicants$/.exec(path)[1])} />
+          )}
+          {/^\/dashboard\/applications\/[^/]+$/.test(path) && (
+            <ApplicationDetailPage go={go} applicationId={decodeURIComponent(/^\/dashboard\/applications\/([^/]+)$/.exec(path)[1])} />
+          )}
+          {/^\/dashboard\/students\/[^/]+$/.test(path) && (
+            <CompanyStudentProfilePage go={go} studentId={decodeURIComponent(/^\/dashboard\/students\/([^/]+)$/.exec(path)[1])} />
           )}
 
           {path === '/dashboard/skills' && <EmptyModule title="Skill Verification" />}

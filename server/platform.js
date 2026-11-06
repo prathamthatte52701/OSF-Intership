@@ -597,7 +597,11 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   router.get('/company/challenges/:id/applications', companyAuth, (req, res) => {
     const challenge = ownedChallenge(db, req.params.id, req.session.company_id);
     const rows = db.prepare(`SELECT a.id,a.student_id AS studentId,a.applied_at AS appliedAt,a.individual_deadline AS individualDeadline,a.status,
-      s.full_name AS fullName,s.college,s.degree FROM applications a JOIN students s ON s.id=a.student_id WHERE a.challenge_id=? ORDER BY a.applied_at DESC`).all(challenge.id);
+      s.full_name AS fullName,s.college,s.degree,
+      (SELECT submitted_at FROM submissions WHERE application_id=a.id) AS submittedAt,
+      COALESCE((SELECT is_shortlisted FROM evaluations WHERE application_id=a.id),0) AS isShortlisted
+      FROM applications a JOIN students s ON s.id=a.student_id WHERE a.challenge_id=? ORDER BY a.applied_at DESC`).all(challenge.id)
+      .map(row => ({ ...row, isShortlisted: Boolean(row.isShortlisted), skills: listStudentSkills(db, row.studentId) }));
     const applications = rows.map(row => {
       if (row.status !== 'SUBMITTED' && Date.parse(row.individualDeadline) <= nowMs()) {
         db.prepare("UPDATE applications SET status='EXPIRED',updated_at=? WHERE id=? AND status<>'SUBMITTED'").run(nowIso(), row.id);
@@ -615,6 +619,14 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     if (submission?.fileReference) submission.file = fileMetadata(db, application.id, submission.fileReference) ? { id: submission.fileReference } : null;
     const evaluation = db.prepare('SELECT id,rating,feedback,is_shortlisted AS isShortlisted,evaluated_at AS evaluatedAt FROM evaluations WHERE application_id=?').get(application.id) || null;
     res.json({ application: { id: application.id, challengeId: application.challenge_id, appliedAt: application.applied_at, individualDeadline: application.individual_deadline, status: application.status, student: profile, submission, evaluation } });
+  });
+  // Full profile + contact email, only for students who applied to one of this company's challenges.
+  router.get('/company/applications/:id/student', companyAuth, (req, res) => {
+    const application = ownedApplication(db, req.params.id, req.session.company_id);
+    const profile = studentProfile(db, application.student_id, { includeResume: true });
+    if (!profile) throw new InputError('Application not found.', 404);
+    profile.contactEmail = db.prepare('SELECT u.email FROM students s JOIN student_users u ON u.id=s.account_id WHERE s.id=?').get(application.student_id)?.email || null;
+    res.json({ student: profile });
   });
   router.get('/company/applications/:id/file', companyAuth, (req, res) => {
     const application = ownedApplication(db, req.params.id, req.session.company_id);
@@ -711,7 +723,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
   router.put('/company/applications/:id/evaluation', companyAuth, (req, res) => {
     const application = ownedApplication(db, req.params.id, req.session.company_id);
-    if (!db.prepare('SELECT 1 FROM submissions WHERE application_id=?').get(application.id)) throw new InputError('Submit a task before evaluating this application.', 409);
+    if (application.status !== 'SUBMITTED' || !db.prepare('SELECT 1 FROM submissions WHERE application_id=? AND submitted_at IS NOT NULL').get(application.id)) throw new InputError('Only a submitted application can be evaluated.');
     const body = req.body || {};
     const rating = body.rating == null || body.rating === '' ? null : Number(body.rating);
     if (rating != null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) throw new InputError('Rating must be a whole number from 1 to 5.');
@@ -943,7 +955,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
   router.get('/company/saved-students', companyAuth, (req, res) => {
     const rows = db.prepare('SELECT student_id FROM saved_students WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
-    res.json({ students: rows.map(({ student_id: id }) => ({ ...studentProfile(db, id, { includeResume: true }), savedAt: db.prepare('SELECT created_at FROM saved_students WHERE company_id=? AND student_id=?').get(req.session.company_id, id).created_at })) });
+    res.json({ students: rows.map(({ student_id: id }) => ({ ...studentProfile(db, id, { includeResume: true }), ...db.prepare('SELECT created_at AS savedAt,note FROM saved_students WHERE company_id=? AND student_id=?').get(req.session.company_id, id) })) });
   });
   router.post('/company/saved-students/:studentId', companyAuth, (req, res) => {
     if (!db.prepare('SELECT 1 FROM students WHERE id=?').get(req.params.studentId)) throw new InputError('Student profile not found.', 404);
