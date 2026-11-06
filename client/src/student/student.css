@@ -45,7 +45,6 @@
 .sp-page-title p { margin: 0; max-width: 690px; color: var(--text-secondary); font-size: 13px; }
 .sp-title-action { flex: 0 0 auto; }
 .sp-eyebrow { display: block; color: var(--osf-blue-support); font-size: 9px; font-weight: 850; letter-spacing: .13em; }
-.student-root :root[data-theme='dark'] .sp-eyebrow { color: #9ec3ff; }
 .sp-button { min-height: 40px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; border-radius: 8px; font-size: 12.5px; font-weight: 750; text-decoration: none; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
 .sp-button:hover:not(:disabled) { transform: translateY(-1px); }
 .sp-button-primary { color: #fff; background: var(--osf-blue); border-color: var(--osf-blue); }
@@ -282,21 +281,6 @@
 .student-company-link { margin-top: 17px; padding-top: 14px; display: block; color: var(--text-muted); border-top: 1px solid var(--border-color); text-align: center; font-size: 10px; text-decoration: none; }
 .student-auth-legal { max-width: 440px; margin: 14px 0 0; color: var(--text-muted); text-align: center; font-size: 9px; line-height: 1.5; }
 .student-resend { margin-top: 12px; }
-
-:root[data-theme='dark'] .student-root { color-scheme: dark; }
-:root[data-theme='dark'] .student-sidebar { background: #081426; }
-:root[data-theme='dark'] .student-brand { background: #f9fbff; }
-:root[data-theme='dark'] .sp-eyebrow { color: #9ec3ff; }
-:root[data-theme='dark'] .sp-chip { color: #b5d2ff; background: rgba(40,103,159,.22); }
-:root[data-theme='dark'] .sp-button-primary { color: #fff; background: #245d91; border-color: #3978b0; }
-:root[data-theme='dark'] .sp-button-primary:hover:not(:disabled) { background: #2b6ca5; }
-:root[data-theme='dark'] .sp-button-secondary { color: #c4dcff; }
-:root[data-theme='dark'] .sp-button-secondary:hover:not(:disabled) { background: rgba(40,103,159,.2); }
-:root[data-theme='dark'] .sp-stat-gold .sp-stat-icon { color: #f0cb72; }
-:root[data-theme='dark'] .sp-status-gold { color: #f0cb72; }
-:root[data-theme='dark'] .sp-completion-copy strong { color: #c4dcff; }
-:root[data-theme='dark'] .sp-profile-links a, :root[data-theme='dark'] .sp-project-item a, :root[data-theme='dark'] .sp-submission-links a { color: #9ec3ff; }
-:root[data-theme='dark'] .sp-auth-wrap { background: var(--bg-page); }
 
 @media (max-width: 1120px) {
   .student-shell { grid-template-columns: 220px minmax(0, 1fr); }

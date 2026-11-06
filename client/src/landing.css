@@ -34,22 +34,6 @@
 html:has(.landing-page) { scroll-behavior: smooth; }
 .landing-page [id] { scroll-margin-top: 88px; }
 
-:root[data-theme='dark'] .landing-page {
-  --landing-ink: #f1f5fb;
-  --landing-navy: #081426;
-  --landing-blue: #9ec3ff;
-  --landing-blue-bright: #8bb8ff;
-  --landing-blue-soft: #172d49;
-  --landing-orange: #f2a044;
-  --landing-gold: #e9bd58;
-  --landing-muted: #bdc9d8;
-  --landing-line: #2b405d;
-  --landing-surface: #11243c;
-  --landing-shadow: 0 14px 34px rgba(0, 0, 0, .24);
-  color: #edf3fb;
-  background: #0b1626;
-}
-
 .landing-nav {
   position: sticky;
   top: 0;
@@ -76,23 +60,6 @@ html:has(.landing-page) { scroll-behavior: smooth; }
 .landing-navigation > a:not(.landing-button):hover { color: var(--landing-blue-bright); }
 .landing-login { margin-left: 8px; }
 .landing-menu-toggle { display: none; }
-.landing-theme-toggle {
-  min-height: 36px;
-  padding: 0 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  color: var(--landing-blue);
-  background: transparent;
-  border: 1px solid var(--landing-line);
-  border-radius: 999px;
-  font: 700 13px/1 var(--font-body);
-  cursor: pointer;
-  transition: background .18s ease, border-color .18s ease;
-}
-.landing-theme-toggle:hover { background: var(--landing-blue-soft); border-color: #91b8ed; }
-
 .landing-button {
   min-height: 46px;
   padding: 0 20px;
@@ -444,112 +411,6 @@ html:has(.landing-page) { scroll-behavior: smooth; }
 .landing-footer-bottom { grid-column: 1 / -1; padding-top: 13px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid #ffffff1a; color: #aab8ce; font-size: 9px; }
 .landing-footer-bottom b { color: #f47762; }
 
-:root[data-theme='dark'] .landing-nav { background: rgba(11, 22, 38, .96); border-color: #243853; }
-:root[data-theme='dark'] .landing-navigation > a:not(.landing-button) { color: #d5dfec; }
-:root[data-theme='dark'] .landing-navigation > a:not(.landing-button):hover { color: #a8c9ff; }
-:root[data-theme='dark'] .landing-theme-toggle { color: #f1c45b; border-color: #3b4c63; }
-:root[data-theme='dark'] .landing-theme-toggle:hover { background: #1c314d; }
-:root[data-theme='dark'] .landing-hero { background: linear-gradient(118deg, #0c1a2c 0%, #102744 56%, #0d1c32 100%); }
-:root[data-theme='dark'] .landing-hero::before { opacity: .17; }
-:root[data-theme='dark'] .landing-hero::after { border-color: #375475; box-shadow: 0 0 0 30px #10213a, 0 0 0 72px #0e1d32; }
-:root[data-theme='dark'] .landing-hero h1 { color: #f5f7fb; }
-:root[data-theme='dark'] .landing-hero-copy { color: #d4deeb; }
-:root[data-theme='dark'] .landing-hero h1 span { background-image: linear-gradient(92deg, #94bdff 9%, #e3bd62 100%); }
-:root[data-theme='dark'] .landing-hero-proof span { color: #dce8f8; background: #172c46; border-color: #2b4564; }
-:root[data-theme='dark'] .landing-proof-strip { background: #122640; border-color: #2a405d; }
-:root[data-theme='dark'] .landing-proof-strip article + article { border-color: #2a405d; }
-:root[data-theme='dark'] .landing-proof-strip small { color: #eef3f9; }
-:root[data-theme='dark'] .landing-proof-strip em { color: #aebdd0; }
-:root[data-theme='dark'] .landing-event-proof { color: #c6e8d8; background: #102c2b; border-color: #1e554a; }
-:root[data-theme='dark'] .landing-journey { background: linear-gradient(130deg, #101d31, #172842); border-color: #263954; }
-:root[data-theme='dark'] .landing-ecosystem,
-:root[data-theme='dark'] .landing-process-section,
-:root[data-theme='dark'] .landing-why,
-:root[data-theme='dark'] .landing-india-first { background: #101f34; border-color: #263a55; }
-:root[data-theme='dark'] .landing-workshop { background: linear-gradient(110deg, #0c192b, #102440 74%, #122744); }
-:root[data-theme='dark'] .landing-hackathon,
-:root[data-theme='dark'] .landing-opportunities,
-:root[data-theme='dark'] .landing-trust,
-:root[data-theme='dark'] .landing-communities,
-:root[data-theme='dark'] .landing-business-section { background: #0b1626; }
-:root[data-theme='dark'] .landing-event-reveal { background: linear-gradient(130deg, #172438, #202a3a); border-color: #37445a; }
-:root[data-theme='dark'] .landing-language { background: #10213a; border-color: #2b405e; }
-:root[data-theme='dark'] .landing-journey-card,
-:root[data-theme='dark'] .landing-ecosystem-card,
-:root[data-theme='dark'] .landing-workshop-features article,
-:root[data-theme='dark'] .landing-track-panel,
-:root[data-theme='dark'] .landing-prize-panel,
-:root[data-theme='dark'] .landing-global-phases article,
-:root[data-theme='dark'] .landing-opportunity-card,
-:root[data-theme='dark'] .landing-why-grid article,
-:root[data-theme='dark'] .landing-process-card,
-:root[data-theme='dark'] .landing-community-grid article,
-:root[data-theme='dark'] .landing-language-support article,
-:root[data-theme='dark'] .landing-business-grid article,
-:root[data-theme='dark'] .landing-india-trust,
-:root[data-theme='dark'] .landing-india-grid article { color: #eef3f9; background: #142843; border-color: #2a415e; }
-:root[data-theme='dark'] .landing-prize-panel { background: #142843; }
-:root[data-theme='dark'] .landing-journey-card h3,
-:root[data-theme='dark'] .landing-ecosystem-card h3,
-:root[data-theme='dark'] .landing-workshop-features strong,
-:root[data-theme='dark'] .landing-panel-heading h3,
-:root[data-theme='dark'] .landing-benefit-list strong,
-:root[data-theme='dark'] .landing-prize-panel h3,
-:root[data-theme='dark'] .landing-global-phases strong,
-:root[data-theme='dark'] .landing-opportunity-card h3,
-:root[data-theme='dark'] .landing-why-grid article h3,
-:root[data-theme='dark'] .landing-process-card h3,
-:root[data-theme='dark'] .landing-community-grid h3,
-:root[data-theme='dark'] .landing-language-support strong,
-:root[data-theme='dark'] .landing-business-grid h3,
-:root[data-theme='dark'] .landing-india-trust > article > strong,
-:root[data-theme='dark'] .landing-india-grid h3 { color: #f3f6fb; }
-:root[data-theme='dark'] .landing-journey-card p,
-:root[data-theme='dark'] .landing-ecosystem-card p,
-:root[data-theme='dark'] .landing-workshop-copy > p:not(.landing-eyebrow),
-:root[data-theme='dark'] .landing-workshop-features span,
-:root[data-theme='dark'] .landing-benefit-list small,
-:root[data-theme='dark'] .landing-prize-panel > p:not(.landing-eyebrow),
-:root[data-theme='dark'] .landing-registration-note,
-:root[data-theme='dark'] .landing-global-phases small,
-:root[data-theme='dark'] .landing-opportunity-card ul,
-:root[data-theme='dark'] .landing-opportunity-stats span,
-:root[data-theme='dark'] .landing-why-grid article p,
-:root[data-theme='dark'] .landing-process-card p,
-:root[data-theme='dark'] .landing-community-grid p,
-:root[data-theme='dark'] .landing-language-copy > p:not(.landing-eyebrow),
-:root[data-theme='dark'] .landing-language-support span,
-:root[data-theme='dark'] .landing-business-intro > p:not(.landing-eyebrow),
-:root[data-theme='dark'] .landing-business-grid p,
-:root[data-theme='dark'] .landing-india-trust > p:not(.landing-eyebrow),
-:root[data-theme='dark'] .landing-india-trust > article > p,
-:root[data-theme='dark'] .landing-india-grid p { color: #bdc9d8; }
-:root[data-theme='dark'] .landing-section-heading > p:last-child { color: #bdc9d8; }
-:root[data-theme='dark'] .landing-section-heading h2,
-:root[data-theme='dark'] .landing-trust h2,
-:root[data-theme='dark'] .landing-business-intro h2,
-:root[data-theme='dark'] .landing-india-trust h2,
-:root[data-theme='dark'] .landing-workshop-copy h2,
-:root[data-theme='dark'] .landing-hackathon-heading h2,
-:root[data-theme='dark'] .landing-hackathon-heading h3 { color: #f3f6fb; }
-:root[data-theme='dark'] .landing-workshop-copy h2 span { color: #91baff; }
-:root[data-theme='dark'] .landing-hackathon-heading h3 { color: #e9bd58; }
-:root[data-theme='dark'] .landing-journey-mark,
-:root[data-theme='dark'] .landing-icon-tile { background: #1d3655; }
-:root[data-theme='dark'] .landing-event-mystery > div { background: #1b2b42; border-color: #6b5836; }
-:root[data-theme='dark'] .landing-event-mystery span { color: #d3deeb; }
-:root[data-theme='dark'] .landing-track-list span { color: #d4deeb; background: #1b304b; border-color: #304866; }
-:root[data-theme='dark'] .landing-prize-panel ul { background: #102039; border-color: #2a405a; }
-:root[data-theme='dark'] .landing-prize-panel li { color: #d2dbe7; }
-:root[data-theme='dark'] .landing-journey-callout { color: #fff; }
-:root[data-theme='dark'] .landing-opportunity-stats { background: #142843; border-color: #2a415e; }
-:root[data-theme='dark'] .landing-opportunity-stats > div + div { border-color: #2b405b; }
-:root[data-theme='dark'] .landing-opportunity-stats strong { color: #f1f5fb; }
-:root[data-theme='dark'] .landing-language-demo > div { background: #1a2c45; border-color: #394d68; }
-:root[data-theme='dark'] .landing-business-grid .landing-icon-tile,
-:root[data-theme='dark'] .landing-india-grid .landing-icon-tile { background: #1d3655; }
-:root[data-theme='dark'] .landing-prize-mark { color: #f1c45b; background: #342b20; border-color: #665330; }
-
 @media (max-width: 1120px) {
   .landing-nav { padding-inline: 28px; }
   .landing-navigation { gap: 14px; }
@@ -575,10 +436,8 @@ html:has(.landing-page) { scroll-behavior: smooth; }
   .landing-menu-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
   .landing-menu-toggle[aria-expanded="true"] span:last-child { transform: translateY(-7px) rotate(-45deg); }
   .landing-navigation { position: absolute; top: calc(100% + 8px); right: 20px; left: 20px; padding: 12px; display: none; align-items: stretch; flex-direction: column; gap: 2px; background: #fff; border: 1px solid #e0e8f2; border-radius: 17px; box-shadow: 0 16px 35px rgba(22,48,83,.16); }
-  :root[data-theme='dark'] .landing-navigation { background: #0f2036; border-color: #293e58; }
   .landing-navigation.is-open { display: flex; }
   .landing-navigation > a:not(.landing-button) { padding: 10px 11px; font-size: 15px; }
-  .landing-navigation .landing-theme-toggle { justify-content: flex-start; min-height: 42px; padding-inline: 11px; border-color: transparent; }
   .landing-navigation .landing-login { margin: 0; }
   .landing-navigation .landing-button { margin-top: 6px; }
   .landing-hero { padding: 48px 30px 32px; }

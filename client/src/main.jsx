@@ -27,11 +27,9 @@ const iconPaths = {
   LogOut: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
   Mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z M22 6l-10 7L2 6',
   MapPin: 'M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
-  Moon: 'M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z',
   MoreHorizontal: 'M12 12h.01 M19 12h.01 M5 12h.01',
   Search: 'm21 21-4.3-4.3 M19 10.5a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0',
   ShieldCheck: 'M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z M9 12l2 2 4-4',
-  Sun: 'M12 2v2 M12 20v2 M4.93 4.93l1.42 1.42 M17.65 17.65l1.42 1.42 M2 12h2 M20 12h2 M4.93 19.07l1.42-1.42 M17.65 6.35l1.42-1.42 M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
   UserRound: 'M20 21a8 8 0 0 0-16 0 M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z',
   X: 'M18 6 6 18 M6 6l12 12',
   AlertCircle: 'M12 8v4 M12 16h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
@@ -126,16 +124,6 @@ function toUiProfile(company) {
 function App() {
   const [page, setPage] = useState(startPath);
   const [previewMode, setPreviewMode] = useState('desktop');
-  const [dark, setDark] = useState(() => {
-    try {
-      const q = new URLSearchParams(location.search).get('theme');
-      if (q === 'dark') return true;
-      if (q === 'light') return false;
-      return localStorage.getItem('osf-theme') === 'dark';
-    } catch {
-      return false;
-    }
-  });
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [step, setStep] = useState(1);
@@ -182,14 +170,6 @@ function App() {
   const [setupRecoveryMessage, setSetupRecoveryMessage] = useState('');
   const [setupRecoveryCooldown, setSetupRecoveryCooldown] = useState(0);
   const [setupLinkError, setSetupLinkError] = useState('');
-
-  /* Sync Theme */
-  useEffect(() => {
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-    try {
-      localStorage.setItem('osf-theme', dark ? 'dark' : 'light');
-    } catch {}
-  }, [dark]);
 
   /* Persist pending registration */
   useEffect(() => {
@@ -680,7 +660,7 @@ function App() {
     return (
       <div className={`responsive-app-frame${previewClass}`}>
         <div className="responsive-app-content">
-          <LandingPage go={go} dark={dark} onToggleTheme={() => setDark(value => !value)} />
+          <LandingPage go={go} />
         </div>
       </div>
     );
@@ -753,14 +733,6 @@ function App() {
               <button className="website-nav-link" onClick={() => go('/')}>← Back to Website</button>
               <button className="contact-nav-link" onClick={() => go('/contact')}>
                 Contact Us
-              </button>
-              <button
-                className="theme-toggle"
-                onClick={() => setDark(v => !v)}
-                aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`}
-              >
-                {dark ? <Icon name="Sun" size={16} /> : <Icon name="Moon" size={16} />}
-                <span>{dark ? 'Light' : 'Dark'} Mode</span>
               </button>
             </div>
           </header>
@@ -1560,8 +1532,6 @@ function App() {
                 setAccount(current => ({ ...current, profile: toUiProfile(company) }))
               }
               date={fmtDate}
-              dark={dark}
-              setDark={setDark}
             />
           )}
         </div>

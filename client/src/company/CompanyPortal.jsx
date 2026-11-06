@@ -12,8 +12,6 @@ const iconPaths = {
   CheckCircle2: 'M22 11.08V12a10 10 0 1 1-5.93-9.14 M22 4 12 14.01l-3-3',
   Clock3: 'M12 8v4l3 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
   LogOut: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
-  Moon: 'M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z',
-  Sun: 'M12 2v2 M12 20v2 M4.93 4.93l1.42 1.42 M17.65 17.65l1.42 1.42 M2 12h2 M20 12h2 M4.93 19.07l1.42-1.42 M17.65 6.35l1.42-1.42 M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
   Target: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M12 12h.01',
   ShieldCheck: 'M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z M9 12l2 2 4-4',
   UsersRound: 'M18 21a8 8 0 0 0-16 0 M22 20a6 6 0 0 0-9-5.2 M15 10a4 4 0 1 0-4-4 M21 11a3 3 0 1 0-4-4.3',
@@ -53,7 +51,7 @@ function EmptyModule({ title }) {
   );
 }
 
-export default function CompanyPortal({ path, go, account, logout, onProfileUpdated, date, dark, setDark }) {
+export default function CompanyPortal({ path, go, account, logout, onProfileUpdated, date }) {
   const contactName = account?.profile?.contact || 'Representative';
   const activeModule = moduleForPath(path);
 
@@ -123,14 +121,6 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
           <div className="dash-header-tools">
             <button className="contact-nav-link" onClick={() => go('/contact')}>
               Contact Us
-            </button>
-            <button
-              className="theme-toggle"
-              onClick={() => setDark(v => !v)}
-              aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`}
-            >
-              {dark ? <Icon name="Sun" size={16} /> : <Icon name="Moon" size={16} />}
-              <span>{dark ? 'Light' : 'Dark'}</span>
             </button>
             <button className="btn btn-outline btn-sm" onClick={logout}>
               <Icon name="LogOut" size={15} />
