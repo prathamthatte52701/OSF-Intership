@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { companyApi } from './companyApi.js';
 
 const FILTERS = ['All', 'Draft', 'Published', 'Closed'];
@@ -18,16 +18,29 @@ function fmtLocal(iso) {
 }
 
 function PublishCloseConfirm({ action, onConfirm, onCancel }) {
+  const confirmRef = useRef(null);
   const text = action === 'publish'
-    ? 'Publishing makes this challenge visible to students.'
-    : 'Closing stops new applications. Students who already applied can still submit until their own deadline.';
+    ? 'Publishing makes this challenge visible to students immediately. They will be able to apply right away.'
+    : 'Closing stops new applications right away. Students who already applied can still submit until their own individual deadline.';
+
+  useEffect(() => {
+    confirmRef.current?.focus();
+    const handleKeyDown = event => {
+      if (event.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel]);
+
   return (
     <div className="confirm-dialog-overlay" role="dialog" aria-modal="true">
       <div className="confirm-dialog">
         <p>{text}</p>
         <div className="confirm-dialog-actions">
           <button className="btn btn-outline btn-sm" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-primary btn-sm" onClick={onConfirm}>Confirm</button>
+          <button ref={confirmRef} className="btn btn-primary btn-sm" onClick={onConfirm}>
+            {action === 'publish' ? 'Publish challenge' : 'Close challenge'}
+          </button>
         </div>
       </div>
     </div>
@@ -97,9 +110,10 @@ export default function LiveChallengePage({ go }) {
   if (!challenges) {
     return (
       <div className="dash-card">
-        <div className="empty-state-box">
-          <span className="loading-spinner" />
-          <strong>Loading challenges…</strong>
+        <div className="skeleton-rows">
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
         </div>
       </div>
     );
@@ -115,11 +129,7 @@ export default function LiveChallengePage({ go }) {
 
   return (
     <div>
-      <div className="dash-card-header" style={{ marginBottom: '16px' }}>
-        <div>
-          <h3>Live Challenge</h3>
-          <p>Manage the roles you publish for student applicants</p>
-        </div>
+      <div className="cp-toolbar">
         <button className="btn btn-primary btn-sm" onClick={() => go('/dashboard/challenges/new')}>New challenge</button>
       </div>
 
@@ -211,7 +221,7 @@ export default function LiveChallengePage({ go }) {
 function ChallengeMeta({ challenge }) {
   return (
     <>
-      <div className="challenge-window">
+      <div className="challenge-window tabular-nums">
         {fmtLocal(challenge.applicationOpensAt)} → {fmtLocal(challenge.applicationClosesAt)}
       </div>
       <div className="challenge-skills-chips">
@@ -228,7 +238,7 @@ function RowActions({ challenge, busy, go, onPublish, onClose }) {
     return (
       <>
         <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => go(`/dashboard/challenges/${encodeURIComponent(challenge.id)}/edit`)}>Edit</button>
-        <button className="btn btn-primary btn-sm" disabled={busy} onClick={onPublish}>Publish</button>
+        <button className="btn btn-outline btn-sm" disabled={busy} onClick={onPublish}>Publish</button>
       </>
     );
   }
@@ -238,16 +248,22 @@ function RowActions({ challenge, busy, go, onPublish, onClose }) {
   return <span className="data-table-value">No actions</span>;
 }
 
+function statusPillClass(status) {
+  if (status === 'PUBLISHED') return 'success';
+  if (status === 'CLOSED') return 'neutral';
+  return 'neutral';
+}
+
 function ChallengeRow({ challenge, busy, error, go, onPublish, onClose }) {
   return (
     <tr>
       <td>{challenge.roleTitle}</td>
-      <td><span className={`status-pill ${challenge.status === 'PUBLISHED' ? 'success' : challenge.status === 'CLOSED' ? 'warning' : ''}`}>{STATUS_LABEL[challenge.status]}</span></td>
+      <td><span className={`status-pill ${statusPillClass(challenge.status)}`}>{STATUS_LABEL[challenge.status]}</span></td>
       <td><ChallengeMeta challenge={challenge} /></td>
-      <td>{challenge.individualTaskDurationDays}</td>
+      <td className="tabular-nums">{challenge.individualTaskDurationDays}</td>
       <td>{challenge.isPaid ? 'Paid' : 'Unpaid'}</td>
       <td className="challenge-skills-cell">{(challenge.requiredSkills || []).map(skill => <span key={skill} className="chip">{skill}</span>)}</td>
-      <td>{challenge.applicationCount ?? 0}</td>
+      <td className="tabular-nums">{challenge.applicationCount ?? 0}</td>
       <td>
         <div className="challenge-row-actions">
           <RowActions challenge={challenge} busy={busy} go={go} onPublish={onPublish} onClose={onClose} />
@@ -264,14 +280,14 @@ function ChallengeCard({ challenge, busy, error, go, onPublish, onClose }) {
       <div className="dash-card-header">
         <div>
           <h3>{challenge.roleTitle}</h3>
-          <span className={`status-pill ${challenge.status === 'PUBLISHED' ? 'success' : challenge.status === 'CLOSED' ? 'warning' : ''}`}>{STATUS_LABEL[challenge.status]}</span>
+          <span className={`status-pill ${statusPillClass(challenge.status)}`}>{STATUS_LABEL[challenge.status]}</span>
         </div>
       </div>
       <ChallengeMeta challenge={challenge} />
       <div className="data-table-rows">
-        <div className="data-table-row"><span className="data-table-label">Task days</span><span className="data-table-value">{challenge.individualTaskDurationDays}</span></div>
+        <div className="data-table-row"><span className="data-table-label">Task days</span><span className="data-table-value tabular-nums">{challenge.individualTaskDurationDays}</span></div>
         <div className="data-table-row"><span className="data-table-label">Compensation</span><span className="data-table-value">{challenge.isPaid ? 'Paid' : 'Unpaid'}</span></div>
-        <div className="data-table-row"><span className="data-table-label">Applicants</span><span className="data-table-value">{challenge.applicationCount ?? 0}</span></div>
+        <div className="data-table-row"><span className="data-table-label">Applicants</span><span className="data-table-value tabular-nums">{challenge.applicationCount ?? 0}</span></div>
       </div>
       <div className="challenge-row-actions">
         <RowActions challenge={challenge} busy={busy} go={go} onPublish={onPublish} onClose={onClose} />

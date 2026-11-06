@@ -2,6 +2,7 @@ import React from 'react';
 import CompanyProfile from '../CompanyProfile.jsx';
 import LiveChallengePage from './LiveChallengePage.jsx';
 import ChallengeFormPage from './ChallengeFormPage.jsx';
+import { companyApi } from './companyApi.js';
 import './company.css';
 
 /* SVG Icon Component (mirrors main.jsx Icon) */
@@ -53,7 +54,9 @@ function EmptyModule({ title }) {
 
 export default function CompanyPortal({ path, go, account, logout, onProfileUpdated, date }) {
   const contactName = account?.profile?.contact || 'Representative';
+  const companyName = account?.profile?.company || contactName;
   const activeModule = moduleForPath(path);
+  const [challengeSummary, setChallengeSummary] = React.useState(null);
 
   React.useEffect(() => {
     const redirectTargets = new Set(['/dashboard', '/dashboard/activity']);
@@ -63,7 +66,35 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
     }
   }, [path]);
 
+  React.useEffect(() => {
+    if (!path.startsWith('/dashboard/challenges')) return;
+    companyApi.challenges()
+      .then(result => setChallengeSummary({
+        published: result.challenges.filter(c => c.status === 'PUBLISHED').length,
+        draft: result.challenges.filter(c => c.status === 'DRAFT').length,
+      }))
+      .catch(() => {});
+  }, [path]);
+
   const title = path === '/dashboard/account' ? 'Account Information' : activeModule?.name || 'Live Challenge';
+
+  const subtitle = (() => {
+    if (path === '/dashboard/account') return 'Sign-in and contact details for your OSF enterprise account.';
+    if (!activeModule) return undefined;
+    switch (activeModule.name) {
+      case 'Live Challenge':
+        return challengeSummary
+          ? `${companyName} · ${challengeSummary.published} published, ${challengeSummary.draft} draft${challengeSummary.draft === 1 ? '' : 's'}`
+          : `${companyName} · the roles you publish for student applicants`;
+      case 'Company Profile':
+        return 'Keep your enterprise details current so students see an accurate listing.';
+      case 'Skill Verification':
+      case 'Talent Discovery':
+        return 'Coming in the next step of the company portal.';
+      default:
+        return undefined;
+    }
+  })();
 
   return (
     <div className="dash-container">
@@ -112,7 +143,10 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
         {/* Top Header */}
         <header className="dash-header">
           <div className="dash-header-title">
-            <h2>{title}</h2>
+            <div>
+              <h2>{title}</h2>
+              {subtitle && <p className="dash-header-subtitle">{subtitle}</p>}
+            </div>
             <span className={`status-pill ${account?.profile?.emailVerified ? 'success' : 'warning'}`}>
               {account?.profile?.emailVerified && <Icon name="CheckCircle2" size={12} />} Email {account?.profile?.emailVerified ? 'Verified' : 'Not Verified'}
             </span>

@@ -327,9 +327,10 @@ export default function ChallengeFormPage({ go, challengeId }) {
   if (loading) {
     return (
       <div className="cp-card">
-        <div className="empty-state-box">
-          <span className="loading-spinner" />
-          <strong>Loading challenge…</strong>
+        <div className="skeleton-rows">
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
+          <div className="skeleton-row" />
         </div>
       </div>
     );

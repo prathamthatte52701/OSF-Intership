@@ -964,6 +964,44 @@ a:hover {
   to { transform: rotate(360deg); }
 }
 
+/* Skeleton loading rows (replace lone "Loading..." states) */
+.skeleton-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeleton-row {
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface-sunken) 25%,
+    var(--bg-surface-elevated) 50%,
+    var(--bg-surface-sunken) 75%
+  );
+  background-size: 200% 100%;
+  animation: osf-skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes osf-skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Badges & Status Pills */
 .status-pill {
   display: inline-flex;
@@ -986,6 +1024,12 @@ a:hover {
   background-color: var(--color-warning-bg);
   color: var(--color-warning);
   border: 1px solid var(--color-warning-border);
+}
+
+.status-pill.neutral {
+  background-color: var(--bg-surface-sunken);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
 
 /* Alerts & Notices */
@@ -1421,7 +1465,7 @@ a:hover {
   height: 72px;
   flex-shrink: 0;
   padding: 0 clamp(20px, 4vw, 48px);
-  background-color: var(--bg-surface);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--osf-blue) 5%, var(--bg-surface)) 0%, var(--bg-surface) 70%);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -1438,9 +1482,15 @@ a:hover {
 }
 
 .dash-header-title h2 {
-  font-size: 19.8px;
+  font-size: 28px;
   margin: 0;
-  font-weight: 700;
+  font-weight: 600;
+}
+
+.dash-header-subtitle {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .dash-header-tools {
@@ -1537,9 +1587,9 @@ a:hover {
 .dash-card {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 14px;
   padding: 24px;
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-sm);
 }
 
 .dash-card-header {
