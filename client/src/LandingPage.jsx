@@ -33,6 +33,7 @@ const nav = [
   ['Features', '#ecosystem'],
   ['Events', '#hackathon'],
   ['Opportunities', '#opportunities'],
+  ['Student Portal', '/student/login'],
   ['For Business', '#business'],
   ['About', '#community'],
 ];

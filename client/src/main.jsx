@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import CompanyProfile from './CompanyProfile.jsx';
 import ContactUs from './ContactUs.jsx';
 import LandingPage from './LandingPage.jsx';
+import StudentPortal from './student/StudentPortal.jsx';
 import { citiesForState, INDIAN_STATES, normalizeIndianPhone } from './india.js';
 import { api } from './api.js';
 import './styles.css';
@@ -681,6 +682,8 @@ function App() {
   const progressLabels = ['Company Details', 'Business Location', 'Contact Information'];
 
   const previewClass = previewSwitcherEnabled && previewMode === 'mobile' && page !== '/' ? ' preview-mobile' : '';
+
+  if (page.startsWith('/student')) return <StudentPortal path={page} go={go} />;
 
   if (page === '/') {
     return (
