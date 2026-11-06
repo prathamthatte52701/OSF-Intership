@@ -22,6 +22,13 @@ export function otpMatches(candidate, expectedHex) {
 export const hashPassword = password => argon2.hash(password, { type: argon2.argon2id });
 export const verifyPassword = (hash, password) => argon2.verify(hash, password);
 
+// Cookie lookup that never throws on a malformed %-escape; returns '' instead.
+export function cookieValue(req, name) {
+  const entry = (req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith(`${name}=`));
+  if (!entry) return '';
+  try { return decodeURIComponent(entry.slice(name.length + 1)); } catch { return ''; }
+}
+
 export function validatePassword(password) {
   return typeof password === 'string'
     && password.length >= 12

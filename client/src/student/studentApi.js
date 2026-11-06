@@ -5,9 +5,13 @@ async function request(path, options = {}) {
   const response = await fetch(`/api${path}`, { credentials: 'include', ...options, headers });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(result.error || 'The request could not be completed.');
+    const retryAfter = Number(response.headers.get('Retry-After')) || 0;
+    const minutes = Math.max(1, Math.ceil(retryAfter / 60));
+    const error = new Error(response.status === 429
+      ? `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`
+      : result.error || 'The request could not be completed.');
     error.status = response.status;
-    error.retryAfter = Number(response.headers.get('Retry-After')) || 0;
+    error.retryAfter = retryAfter;
     throw error;
   }
   return result;

@@ -2,11 +2,12 @@ import './env.js';
 import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { failedLoginLimiter, generalLimiter, loginBlockedMessage, sendTooMany } from './rateLimits.js';
 import { randomBytes } from 'node:crypto';
 import { db } from './db.js';
 import { createPlatformRouter, expireAssessmentAttempts } from './platform.js';
 import { sendOtpEmail, sendPasswordChangedEmail, sendSetupEmail } from './mail.js';
-import { hashOtp, hashPassword, newId, newOtp, newSecret, newUserId, otpMatches, sha256, validatePassword, verifyPassword } from './security.js';
+import { hashOtp, hashPassword, newId, newOtp, newSecret, newUserId, otpMatches, sha256, validatePassword, verifyPassword, cookieValue } from './security.js';
 import { InputError, validateCompanyProfile, validateRegistration } from './validation.js';
 
 const app = express();
@@ -31,7 +32,12 @@ if (!process.env.OTP_HMAC_SECRET) {
 app.disable('x-powered-by');
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
 app.use(express.json({ limit: '32kb' }));
-app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeaders: 'draft-8', legacyHeaders: false }));
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  if (!Number.isInteger(hops) || hops < 0) throw new Error('TRUST_PROXY must be a non-negative integer (number of proxy hops).');
+  app.set('trust proxy', hops);
+}
+app.use('/api/', generalLimiter);
 const passwordSetupIpLimiter = rateLimit({
   windowMs: resendWindowMs, limit: maxResends, standardHeaders: 'draft-8', legacyHeaders: false,
   handler: (_req, res) => res.status(429).json({ error: 'If the account is eligible, a setup link will be sent. Please wait before trying again.' }),
@@ -48,8 +54,7 @@ const config = { appOrigin: (process.env.APP_ORIGIN || 'http://localhost:3000').
 const cookieOptions = `HttpOnly; SameSite=Lax; Path=/; Max-Age=${sessionLifeMs / 1000}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
 
 function readCookie(req, name) {
-  const entry = (req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith(`${name}=`));
-  return entry ? decodeURIComponent(entry.slice(name.length + 1)) : '';
+  return cookieValue(req, name);
 }
 
 function sessionFor(req) {
@@ -219,9 +224,15 @@ app.post('/api/auth/setup-password', asyncRoute(async (req, res) => {
 app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const userId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const wait = failedLoginLimiter.blockedFor(req, userId);
+  if (wait) return sendTooMany(res, wait, loginBlockedMessage);
   const user = db.prepare(`SELECT u.id,u.user_id,u.password_hash FROM users u WHERE u.user_id=? COLLATE NOCASE`).get(userId);
-  const valid = Boolean(user?.password_hash && password && await verifyPassword(user.password_hash, password).catch(() => false));
-  if (!valid) throw new InputError('The User ID or password is incorrect.', 401);
+  const valid = Boolean(user?.password_hash && password && await verifyPassword(user.password_hash, password).catch(error => {
+    console.warn(`Company login: password verification threw (${error?.code || error?.name || 'Error'}).`);
+    return false;
+  }));
+  if (!valid) { failedLoginLimiter.fail(req, userId); throw new InputError('The User ID or password is incorrect.', 401); }
+  failedLoginLimiter.reset(req, userId);
   const token = newSecret(32); const expiresAt = now() + sessionLifeMs;
   db.prepare('INSERT INTO sessions (token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)').run(sha256(token), user.id, expiresAt, isoNow());
   res.setHeader('Set-Cookie', `${cookieName}=${encodeURIComponent(token)}; ${cookieOptions}`);
@@ -283,9 +294,14 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 app.use((error, _req, res, _next) => {
-  const status = Number(error.status) || (error.code === 'SQLITE_CONSTRAINT_UNIQUE' ? 409 : 500);
-  if (status >= 500) console.error('OSF API request failed.');
-  res.status(status).json({ error: status >= 500 ? 'The request could not be completed.' : error.message });
+  // Only InputError carries a message written for clients; everything else is logged here and kept generic.
+  if (error instanceof InputError) return res.status(error.status).json({ error: error.message });
+  let status = 500; let message = 'Something went wrong. Please try again.';
+  if (error?.type === 'entity.too.large') { status = 413; message = 'The request is too large.'; }
+  else if (error?.type?.startsWith('entity.') || error instanceof SyntaxError) { status = 400; message = 'The request could not be read.'; }
+  else if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE') { status = 409; message = 'This record already exists.'; }
+  if (status >= 500) console.error(`OSF API request failed (${error?.code || error?.name || 'Error'}).`);
+  res.status(status).json({ error: message });
 });
 
 export { app };

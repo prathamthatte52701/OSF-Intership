@@ -9,6 +9,7 @@ import { dirname } from 'node:path';
 import { InputError } from './validation.js';
 import { hashOtp, hashPassword, newId, newOtp, newSecret, otpMatches, sha256, validatePassword, verifyPassword } from './security.js';
 import { sendStudentOtpEmail } from './mail.js';
+import { failedLoginLimiter, loginBlockedMessage, sendTooMany } from './rateLimits.js';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const validEmail = value => typeof value === 'string' && value.trim().length <= 254 && emailPattern.test(value.trim());
@@ -315,9 +316,15 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   router.post('/student/auth/login', asyncRoute(async (req, res) => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const wait = failedLoginLimiter.blockedFor(req, email);
+    if (wait) return sendTooMany(res, wait, loginBlockedMessage);
     const user = db.prepare('SELECT id,email,password_hash,account_status,email_verified FROM student_users WHERE email=? COLLATE NOCASE').get(email);
-    const valid = Boolean(user && user.account_status === 'ACTIVE' && user.email_verified === 1 && password && await verifyPassword(user.password_hash, password).catch(() => false));
-    if (!valid) throw new InputError('The email or password is incorrect.', 401);
+    const valid = Boolean(user && user.account_status === 'ACTIVE' && user.email_verified === 1 && password && await verifyPassword(user.password_hash, password).catch(error => {
+      console.warn(`Student login: password verification threw (${error?.code || error?.name || 'Error'}).`);
+      return false;
+    }));
+    if (!valid) { failedLoginLimiter.fail(req, email); throw new InputError('The email or password is incorrect.', 401); }
+    failedLoginLimiter.reset(req, email);
     const token = newSecret(32); const expires = nowMs() + studentSessionLifeMs;
     db.prepare('INSERT INTO student_sessions(token_hash,student_user_id,expires_at,created_at) VALUES (?,?,?,?)').run(sha256(token), user.id, expires, nowIso());
     res.setHeader('Set-Cookie', `${studentCookie}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${studentSessionLifeMs / 1000}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
