@@ -16,7 +16,7 @@ test('seed is idempotent, populates expected rows, passwords verify', async () =
   for (let i = 0; i < 2; i++) creds = await seed(db, { password, ...sec });
   const n = t => db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c;
   assert.deepEqual([n('companies'), n('users'), n('students'), n('challenges'), n('applications'), n('saved_students'), n('skill_assessments'), n('skill_assessment_attempts')], [5, 5, 5, 12, 8, 2, 1, 1]);
-  assert.equal(n('schema_migrations'), 3);
+  assert.equal(n('schema_migrations'), 4);
   const now = new Date().toISOString();
   assert.equal(db.prepare("SELECT COUNT(*) c FROM challenges WHERE status='PUBLISHED' AND application_opens_at<=? AND application_closes_at>=?").get(now, now).c, 5);
   assert.equal(db.prepare('SELECT COUNT(DISTINCT status) c FROM applications').get().c, 4);
