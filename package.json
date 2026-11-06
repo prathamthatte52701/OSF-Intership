@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "concurrently --kill-others --names api,web --prefix-colors blue,green \"npm run dev --workspace @osf/server\" \"npm run dev --workspace @osf/client\"",
     "server": "npm run dev --workspace @osf/server",
+    "seed:demo": "npm run seed:demo --workspace @osf/server --",
     "build": "npm run build --workspace @osf/client",
     "preview": "npm run preview --workspace @osf/client"
   },
