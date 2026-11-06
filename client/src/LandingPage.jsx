@@ -34,7 +34,6 @@ const nav = [
   ['Events', '#hackathon'],
   ['Opportunities', '#opportunities'],
   ['For Business', '#business'],
-  ['Pricing', '#pricing'],
   ['About', '#community'],
 ];
 
@@ -200,13 +199,13 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
           </div>
         </section>
 
-        <section className="landing-workshop landing-section" id="business" aria-labelledby="workshop-title">
+        <section className="landing-workshop landing-section" id="company-workshops" aria-labelledby="workshop-title">
           <div className="landing-workshop-copy">
             <p className="landing-eyebrow landing-eyebrow-outline"><span /> FOR COMPANIES & ORGANISATIONS</p>
             <h2 id="workshop-title">Host Your Own<br /><span>Company Workshop.</span></h2>
             <p>Bring your expertise to the next generation. Register your organisation, create professional workshops and share valuable knowledge through interactive learning experiences.</p>
             <div className="landing-workshop-features">
-              {workshopFeatures.map(([icon, title, text]) => <article id={title === 'Pricing Control' ? 'pricing' : undefined} key={title}><LandingIcon name={icon} size={17} /><div><strong>{title}</strong><span>{text}</span></div></article>)}
+              {workshopFeatures.map(([icon, title, text]) => <article key={title}><LandingIcon name={icon} size={17} /><div><strong>{title}</strong><span>{text}</span></div></article>)}
             </div>
             <div className="landing-actions"><a className="landing-button" href="/register" onClick={route('/register')}>Register Your Company <LandingIcon name="arrow" size={16} /></a><span>Simple 4-step registration</span></div>
           </div>
@@ -253,7 +252,7 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
           </div>
         </section>
 
-        <section className="landing-event-reveal landing-section" aria-labelledby="event-reveal-title">
+        <section className="landing-event-reveal landing-section" id="event-announcement" aria-labelledby="event-reveal-title">
           <div className="landing-section-heading landing-centered">
             <p className="landing-eyebrow landing-eyebrow-outline"><span /> SOMETHING BIG IS COMING</p>
             <h2 id="event-reveal-title">The Event Name<br /><span>Will Be Revealed Soon.</span></h2>
@@ -261,15 +260,7 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
           </div>
           <div className="landing-event-mystery">{['Event name', 'Date', 'Venue', 'Surprise'].map(label => <div key={label}><strong>??</strong><span>{label}</span></div>)}</div>
           <p className="landing-event-note">Stay tuned — announcement dropping soon</p>
-        </section>
-
-        <section className="landing-global-reveal landing-section" aria-labelledby="global-reveal-title">
-          <div className="landing-section-heading landing-centered">
-            <p className="landing-eyebrow"><span /> GLOBAL REVEAL — IN PROGRESS</p>
-            <h2 id="global-reveal-title">Being Revealed <span>To The World.</span></h2>
-            <p>Our title is launching systematically — city by city, campus by campus. Watch this space.</p>
-          </div>
-          <div className="landing-global-phases">
+          <div className="landing-global-phases" aria-label="Event announcement rollout">
             <article className="is-complete"><span>✓</span><small>Phase 01</small><strong>Internal Team Briefing</strong></article>
             <article className="is-active"><span>↻</span><small>Phase 02</small><strong>Campus Ambassador Rollout</strong><em>Live now</em></article>
             <article><span><LandingIcon name="globe" size={19} /></span><small>Phase 03</small><strong>Public Global Announcement</strong></article>
@@ -355,7 +346,7 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
           </div>
         </section>
 
-        <section className="landing-business-section landing-section" aria-labelledby="business-title">
+        <section className="landing-business-section landing-section" id="business" aria-labelledby="business-title">
           <div className="landing-business-intro">
             <p className="landing-eyebrow landing-eyebrow-outline"><span /> FOR BUSINESSES</p>
             <h2 id="business-title">Built for Indian Businesses.</h2>
@@ -388,7 +379,7 @@ export default function LandingPage({ go, dark, onToggleTheme }) {
 
       <footer className="landing-footer">
         <div className="landing-footer-brand"><a className="landing-brand" href="/" aria-label="OSF home" onClick={route('/')}><img src="/landing/osf-brand-light.png" alt="Our Startup Freelancer" /></a><p>India’s first AI-powered ecosystem for freelancers and businesses. Empowering skills, creating opportunities.</p><small>Build · Launch · Scale</small></div>
-        <div className="landing-footer-column"><h2>Platform</h2><a href="#opportunities">For Freelancers</a><a href="#business">For Businesses</a><a href="#journey">Verify Skills</a><a href="#ecosystem">AI Features</a><a href="#india-first-title">Mobile App · Soon</a></div>
+        <div className="landing-footer-column"><h2>Platform</h2><a href="#opportunities">For Freelancers</a><a href="#business">For Businesses</a><a href="#journey">Verify Skills</a><a href="#ecosystem">AI Features</a></div>
         <div className="landing-footer-column"><h2>Support</h2><a href="#ecosystem">About OSF</a><a href="/contact" onClick={route('/contact')}>Talk to Us</a><a href="#community">Community Hub</a></div>
         <div className="landing-footer-column"><h2>Headquarters</h2><p>Navlakha, Indore,<br />Madhya Pradesh, 452001<br />India</p><a href="mailto:contact@ourstartupfreelancer.com">contact@ourstartupfreelancer.com</a><a href="tel:+919424871885">+91 94248 71885</a></div>
         <div className="landing-footer-bottom"><span>© {new Date().getFullYear()} Our Startup Freelancer. Empowering Indian talent.</span><span>Made with <b>♥</b> in Indore.</span></div>
