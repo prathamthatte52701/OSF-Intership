@@ -8,6 +8,7 @@ import CompanyPortal from './company/CompanyPortal.jsx';
 import { citiesForState, INDIAN_STATES, normalizeIndianPhone } from './india.js';
 import { api, returnPath } from './api.js';
 import './styles.css';
+import './motion.css';
 
 /* SVG Icon Component */
 const iconPaths = {

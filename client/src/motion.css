@@ -1,0 +1,142 @@
+/* T15 motion polish. Tokens + shared motion rules. Imported last from main.jsx so it wins ties. */
+:root {
+  --ease-out: cubic-bezier(.22,1,.36,1);
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+}
+
+/* 1. Button press feedback + focus rings */
+.btn, .sp-button, .ss-button, .challenge-filter-tab, .dash-sidebar-link, .mobile-dash-tab,
+.student-nav-item, .sidebar-signout-btn, .student-signout {
+  transition-timing-function: var(--ease-out);
+}
+.btn:active:not(:disabled), .sp-button:active:not(:disabled), .challenge-filter-tab:active,
+.dash-sidebar-link:active, .mobile-dash-tab:active, .student-nav-item:active,
+.ss-button:active:not(:disabled), .sidebar-signout-btn:active, .student-signout:active,
+.cp-card button:active:not(:disabled), .confirm-dialog button:active:not(:disabled) {
+  transform: scale(.98);
+}
+.dash-sidebar-link:focus-visible, .challenge-filter-tab:focus-visible, .mobile-dash-tab:focus-visible,
+.sidebar-signout-btn:focus-visible, .company-account-trigger:focus-visible, .chip-removable button:focus-visible {
+  outline: 2px solid var(--osf-gold);
+  outline-offset: 2px;
+}
+
+/* 2. Dialog + toast entrance */
+.confirm-dialog-overlay { animation: cp-overlay-in var(--dur-base) var(--ease-out); }
+.confirm-dialog { animation: cp-dialog-in var(--dur-base) var(--ease-out); }
+@keyframes cp-dialog-in {
+  from { opacity: 0; transform: scale(.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.toast { animation: osf-toast-in var(--dur-base) var(--ease-out); }
+@keyframes osf-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 3. Status pills */
+.status-pill {
+  transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
+}
+.status-pill.is-published::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: osf-pulse-dot 2s var(--ease-out) infinite;
+}
+@keyframes osf-pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: .45; }
+}
+
+/* 4. Card lift (table row tint lives on .challenge-table; cp-table added here) */
+.dash-cards-grid > .dash-card, .sp-challenge-card, .sp-application-card, .sp-stat-card {
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
+}
+@media (hover: hover) {
+  .dash-cards-grid > .dash-card:hover, .sp-challenge-card:hover, .sp-application-card:hover, .sp-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .cp-table tbody tr:hover { background-color: var(--bg-surface-elevated); }
+}
+.cp-table tbody tr { transition: background-color var(--dur-fast) var(--ease-out); }
+
+/* 5. Input focus glow, one treatment everywhere */
+.field input, .field select, .cp-field > input, .cp-field > textarea, .cp-field > select,
+.sp-field > input, .sp-field > textarea, .sp-field > select, .sp-skill-entry input, .ss-field input {
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.field input:focus, .field select:focus, .ss-field input:focus {
+  border-color: var(--border-color-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--border-color-focus) 15%, transparent);
+}
+
+/* 6. Scroll reveal: visible by default; JS adds .reveal-ready to the root, then .is-in per item */
+.reveal-ready .reveal-item {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out);
+  transition-delay: calc(var(--reveal-i, 0) * 60ms);
+}
+.reveal-ready .reveal-item.is-in { opacity: 1; transform: none; }
+
+/* 7. Spotlight glow (four ecosystem cards only) */
+.landing-ecosystem-card { position: relative; overflow: hidden; }
+.landing-ecosystem-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), var(--landing-blue-bright, #1B4D7D), transparent 70%);
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+@media (hover: hover) {
+  .landing-ecosystem-card:hover::after { opacity: .1; }
+}
+
+/* 8. Sliding indicators (desktop only; narrow screens use plain color fades) */
+.slide-ind { position: relative; }
+@media (min-width: 900px) {
+  .dash-sidebar-link.active::before { display: none; }
+  .slide-ind::after, .dash-sidebar-nav.slide-ind::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .slide-ind[data-ready]::after, .dash-sidebar-nav.slide-ind[data-ready]::before { opacity: 1; }
+  .dash-sidebar-nav.slide-ind::before {
+    left: 0; top: 0; width: 3.5px; height: 24px;
+    background: var(--osf-gold);
+    border-radius: 0 2px 2px 0;
+    transform: translateY(var(--ind-y, 0px));
+    z-index: 1;
+  }
+  .dash-sidebar-nav.slide-ind[data-moved]::before { transition: transform var(--dur-base) var(--ease-out); }
+  .challenge-filter-tabs.slide-ind { padding-bottom: 6px; }
+  .challenge-filter-tabs.slide-ind::after {
+    left: 0; top: 0; width: 1px; height: 3px;
+    background: var(--osf-gold);
+    transform-origin: 0 0;
+    transform: translate(var(--ind-x, 0px), var(--ind-y, 0px)) scaleX(var(--ind-w, 1));
+  }
+  .challenge-filter-tabs.slide-ind[data-moved]::after { transition: transform var(--dur-base) var(--ease-out); }
+}
+@media (max-width: 899px) {
+  .dash-sidebar-link, .challenge-filter-tab { transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+}
+
+/* 10. Reduced motion catch-all */
+@media (prefers-reduced-motion: reduce) {
+  .reveal-ready .reveal-item { opacity: 1; transform: none; transition: none; }
+  .status-pill.is-published::before { animation: none; }
+  .btn:active, .sp-button:active, .challenge-filter-tab:active, .dash-sidebar-link:active { transform: none; }
+  .dash-cards-grid > .dash-card:hover, .sp-challenge-card:hover, .sp-application-card:hover, .sp-stat-card:hover { transform: none; }
+  .landing-ecosystem-card::after, .slide-ind::after, .slide-ind::before { transition: none !important; }
+}
