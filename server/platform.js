@@ -458,12 +458,14 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
   router.get('/student/applications', studentAuth, (req, res) => {
     const applications = db.prepare(`SELECT a.id,a.challenge_id AS challengeId,a.applied_at AS appliedAt,a.individual_deadline AS individualDeadline,
-      a.status,a.updated_at AS updatedAt,c.role_title AS roleTitle,c.status AS challengeStatus,c.application_closes_at AS applicationClosesAt
-      FROM applications a JOIN challenges c ON c.id=a.challenge_id WHERE a.student_id=? ORDER BY a.applied_at DESC`).all(req.student.student_id);
+      a.status,a.updated_at AS updatedAt,c.role_title AS roleTitle,c.status AS challengeStatus,c.application_closes_at AS applicationClosesAt,
+      c.application_opens_at AS applicationOpensAt,substr(c.task_description,1,280) AS taskSnippet,c.is_paid AS isPaid,
+      c.compensation_details AS compensationDetails,c.individual_task_duration_days AS individualTaskDurationDays,co.company_name AS companyName
+      FROM applications a JOIN challenges c ON c.id=a.challenge_id LEFT JOIN companies co ON co.id=c.company_id WHERE a.student_id=? ORDER BY a.applied_at DESC`).all(req.student.student_id);
     const rows = applications.map(application => {
       const expired = application.status !== 'SUBMITTED' && Date.parse(application.individualDeadline) <= nowMs();
       if (expired && application.status !== 'EXPIRED') db.prepare("UPDATE applications SET status='EXPIRED',updated_at=? WHERE id=? AND status<>'SUBMITTED'").run(nowIso(), application.id);
-      return { ...application, status: expired ? 'EXPIRED' : application.status, submission: db.prepare('SELECT submitted_at AS submittedAt FROM submissions WHERE application_id=?').get(application.id) || null,
+      return { ...application, isPaid: Boolean(application.isPaid), requiredSkills: challengeSkills(db, application.challengeId), status: expired ? 'EXPIRED' : application.status, submission: db.prepare('SELECT submitted_at AS submittedAt FROM submissions WHERE application_id=?').get(application.id) || null,
         evaluation: db.prepare('SELECT rating,feedback,is_shortlisted AS isShortlisted,evaluated_at AS evaluatedAt FROM evaluations WHERE application_id=?').get(application.id) || null };
     });
     res.json({ applications: rows });

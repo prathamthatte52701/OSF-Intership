@@ -125,6 +125,15 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal((await request(`/api/student/challenges/${challengeId}/applications`, { method: 'POST', cookie: studentCookie, body: {} })).status, 409);
   assert.equal((await request(`/api/student/applications/${application.id}/submission`, { method: 'PUT', cookie: studentCookie, body: { githubUrl: 'https://github.com/aarav/project' } })).status, 409);
   assert.equal((await request(`/api/student/applications/${application.id}/file`, { method: 'PUT', cookie: studentCookie, raw: Buffer.from('test file'), headers: { 'content-type': 'text/plain', 'x-file-name': 'notes.txt' } })).status, 409);
+  const history = (await request('/api/student/applications', { cookie: studentCookie })).body.applications;
+  assert.equal(history.length, 1);
+  assert.equal(history[0].companyName, 'Actual Company Name');
+  assert.equal(history[0].taskSnippet, 'Build a small responsive page.');
+  assert.deepEqual([...history[0].requiredSkills].sort(), ['CSS', 'JavaScript']);
+  assert.equal(history[0].individualTaskDurationDays, 2);
+  assert.equal(history[0].isPaid, false);
+  assert.ok(history[0].applicationOpensAt);
+  assert.deepEqual((await request('/api/student/applications', { cookie: secondStudentCookie })).body.applications, []);
   assert.equal((await request(`/api/student/applications/${application.id}/start`, { method: 'POST', cookie: studentCookie, body: {} })).body.application.status, 'IN_PROGRESS');
   assert.equal((await request(`/api/student/applications/${application.id}/start`, { method: 'POST', cookie: studentCookie, body: {} })).body.application.individualDeadline, application.individualDeadline);
   assert.equal((await request(`/api/company/challenges/${challengeId}/applications`, { cookie: otherCompany.cookie })).status, 404);
