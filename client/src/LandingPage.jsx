@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './landing.css';
 
 const iconPaths = {
@@ -31,7 +31,6 @@ const nav = [
   ['Features', '#ecosystem'],
   ['Events', '#hackathon'],
   ['Opportunities', '#opportunities'],
-  ['Student Portal', '/student/login'],
   ['For Business', '#business'],
   ['About', '#community'],
 ];
@@ -46,10 +45,10 @@ const journey = [
 ];
 
 const ecosystem = [
-  { icon: 'rocket', title: 'Hackathons & Innovation', text: 'Explore events where students can build projects and connect with others.', link: '#hackathon', action: 'Learn more' },
-  { icon: 'briefcase', title: 'Freelance Ecosystem', text: 'Helping verified freelancers and creators connect with startups and businesses.', link: '#opportunities', action: 'Learn more' },
-  { icon: 'building', title: 'Startup Collaboration', text: 'Explore ways for startups to connect with talent and ideas.', link: '#business', action: 'Learn more' },
-  { icon: 'graduation', title: 'Student Opportunities', text: 'Providing internships, mentorship, networking and career-building opportunities.', link: '#opportunities', action: 'Learn more' },
+  { icon: 'rocket', title: 'Hackathons & Innovation', text: 'Explore events where students can build projects and connect with others.', link: '#hackathon', action: 'See hackathons' },
+  { icon: 'briefcase', title: 'Freelance Ecosystem', text: 'Helping verified freelancers and creators connect with startups and businesses.', link: '#opportunities', action: 'See freelance work' },
+  { icon: 'building', title: 'Startup Collaboration', text: 'Explore ways for startups to connect with talent and ideas.', link: '#business', action: 'See startup collaboration' },
+  { icon: 'graduation', title: 'Student Opportunities', text: 'Build a profile, take on live company challenges and get discovered by companies.', link: '#student-portal', action: 'See student programs' },
 ];
 
 const workshopFeatures = [
@@ -62,9 +61,18 @@ const workshopFeatures = [
 const tracks = ['Artificial Intelligence / ML', 'Web3 & Blockchain', 'Cybersecurity & Infra', 'Cross-Platform Apps'];
 
 const opportunityTypes = [
-  { icon: 'briefcase', title: 'Full-Time Jobs', text: ['Explore roles across tech, design, marketing & more', 'Learn about opportunities shared with OSF'] },
-  { icon: 'graduation', title: 'Internships', text: ['Explore internship opportunities', 'Build experience with organisations'] },
-  { icon: 'rocket', title: 'Freelance Projects', text: ['Short-term projects with direct client access', 'Build your portfolio while still studying'] },
+  { icon: 'briefcase', title: 'Live Company Challenges', text: ['Browse challenges posted by companies', 'Apply, start the task and submit your work'] },
+  { icon: 'code', title: 'Skill Assessments', text: ['Take assessments to prove what you know', 'Back your profile with real results'] },
+  { icon: 'star', title: 'Get Discovered', text: ['Companies rate and shortlist student work', 'Build your portfolio while still studying'] },
+];
+
+const portalFeatures = [
+  'Build your profile',
+  'Browse live company challenges',
+  'Apply and start a task',
+  'Upload your work and submit',
+  'Take skill assessments',
+  'Get rated and shortlisted by companies',
 ];
 
 const hackathonBenefits = [
@@ -95,6 +103,34 @@ const indiaFeatures = [
   ['graduation', 'Campus-to-Career', 'Launch your career with paid student internships.'],
   ['people', 'Indore City Clubs', 'Network offline in Madhya Pradesh and beyond.'],
 ];
+
+function NavMenu({ label, items, go, onDone }) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef(null);
+  const trigger = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = e => { if (e.key === 'Escape') { setOpen(false); trigger.current?.focus(); } };
+    const onDown = e => { if (wrap.current && !wrap.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDown);
+    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onDown); };
+  }, [open]);
+  return (
+    <div className="landing-dropdown" ref={wrap}>
+      <button ref={trigger} type="button" className="landing-dropdown-trigger" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        {label} <span aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="landing-dropdown-panel">
+          {items.map(([text, path]) => (
+            <button key={path} type="button" onClick={() => { setOpen(false); onDone(); go(path); }}>{text}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function LandingPage({ go }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -127,8 +163,8 @@ export default function LandingPage({ go }) {
           {nav.map(([label, href]) => href.startsWith('#')
             ? <a key={label} href={href} onClick={closeMenu}>{label}</a>
             : <a key={label} href={href} onClick={route(href)}>{label}</a>)}
-          <a className="landing-login" href="/login" onClick={route('/login')}>Log in</a>
-          <a className="landing-button landing-button-small" href="/register" onClick={route('/register')}>Join Now <span aria-hidden="true">↗</span></a>
+          <NavMenu label="Log in" go={go} onDone={closeMenu} items={[['Student login', '/student/login'], ['Company login', '/login']]} />
+          <NavMenu label="Join now" go={go} onDone={closeMenu} items={[['Create student account', '/student/register'], ['Register your company', '/register']]} />
         </nav>
       </header>
 
@@ -263,7 +299,7 @@ export default function LandingPage({ go }) {
             <div className="landing-section-heading">
               <p className="landing-eyebrow landing-eyebrow-outline"><span /> FOR STUDENTS — ALL OVER INDIA</p>
               <h2 id="opportunities-title">Real Work. Real Pay.<br /><span>Real Opportunities.</span></h2>
-              <p>Through this event, students from every corner of India get direct access to full-time jobs, internships, and freelance projects from companies actively looking to hire.</p>
+              <p>Through this event, students from every corner of India can take on live company challenges, prove their skills in assessments and get discovered by companies.</p>
             </div>
             <div className="landing-opportunity-grid">
               {opportunityTypes.map((item, i) => <article className={'landing-opportunity-card landing-opportunity-' + (i + 1)} key={item.title}>
@@ -271,7 +307,27 @@ export default function LandingPage({ go }) {
                 <ul>{item.text.map(line => <li key={line}>{line}</li>)}</ul>
               </article>)}
             </div>
-            <div className="landing-opportunity-stats"><div><strong>Jobs</strong><span>Explore roles</span></div><div><strong>Internships</strong><span>Gain experience</span></div><div><strong>Projects</strong><span>Build your portfolio</span></div><div><strong>Events</strong><span>Meet and collaborate</span></div></div>
+            <div className="landing-opportunity-stats"><div><strong>Challenges</strong><span>Real company tasks</span></div><div><strong>Assessments</strong><span>Prove your skills</span></div><div><strong>Profile</strong><span>Build your portfolio</span></div><div><strong>Events</strong><span>Meet and collaborate</span></div></div>
+          </div>
+        </section>
+
+        <section className="landing-portal landing-section" id="student-portal" aria-labelledby="portal-title">
+          <div className="landing-portal-copy">
+            <p className="landing-eyebrow landing-eyebrow-outline"><span /> STUDENT PORTAL</p>
+            <h2 id="portal-title">Build your profile.<br /><span>Work on real company challenges.</span></h2>
+            <ul className="landing-portal-list">
+              {portalFeatures.map(f => <li key={f}><LandingIcon name="check" size={16} /> {f}</li>)}
+            </ul>
+            <div className="landing-actions">
+              <a className="landing-button" href="/student/register" onClick={route('/student/register')}>Create student account <LandingIcon name="arrow" size={16} /></a>
+              <a className="landing-button landing-button-outline-dark" href="/student/login" onClick={route('/student/login')}>Student login</a>
+            </div>
+          </div>
+          <div className="landing-portal-preview" aria-hidden="true">
+            <div className="landing-portal-preview-head"><strong>Your profile</strong><span>Student</span></div>
+            <div className="landing-portal-preview-row"><i /><div><b>Live challenge</b><small>Apply and start the task</small></div></div>
+            <div className="landing-portal-preview-row"><i /><div><b>Skill assessment</b><small>Prove what you know</small></div></div>
+            <div className="landing-portal-preview-row"><i /><div><b>Submission</b><small>Rated by the company</small></div></div>
           </div>
         </section>
 
@@ -342,7 +398,7 @@ export default function LandingPage({ go }) {
             <p className="landing-eyebrow landing-eyebrow-outline"><span /> FOR BUSINESSES</p>
             <h2 id="business-title">Built for Indian Businesses.</h2>
             <p>Discover talent and opportunities for businesses across India.</p>
-            <a className="landing-button landing-button-small" href="/register" onClick={route('/register')}>Explore for Businesses <LandingIcon name="arrow" size={14} /></a>
+            <div className="landing-actions"><a className="landing-button landing-button-small" href="/register" onClick={route('/register')}>Register your company <LandingIcon name="arrow" size={14} /></a><a className="landing-text-link" href="/login" onClick={route('/login')}>Company login</a></div>
           </div>
           <div className="landing-business-grid">{businessFeatures.map(([icon, title, text]) => <article key={title}><span className="landing-icon-tile"><LandingIcon name={icon} /></span><h3>{title}</h3><p>{text}</p></article>)}</div>
         </section>
@@ -362,15 +418,16 @@ export default function LandingPage({ go }) {
           <h2 id="final-title">Ready To Build The Future?</h2>
           <p>Join the OSF community to explore events, build projects and connect with other innovators.</p>
           <div className="landing-final-actions">
-            <a className="landing-button landing-button-light" href="https://osfhackathon.in/" target="_blank" rel="noreferrer">Register Now <LandingIcon name="arrow" size={16} /></a>
+            <a className="landing-button landing-button-light" href="https://osfhackathon.in/" target="_blank" rel="noopener noreferrer">Register for the OSF Hackathon <LandingIcon name="arrow" size={16} /></a>
+            <small>Opens osfhackathon.in</small>
           </div>
         </section>
       </main>
 
       <footer className="landing-footer">
         <div className="landing-footer-brand"><a className="landing-brand" href="/" aria-label="OSF home" onClick={route('/')}><img src="/landing/osf-brand.png" alt="Our Startup Freelancer" /></a><p>India’s first AI-powered ecosystem for freelancers and businesses. Empowering skills, creating opportunities.</p><small>Build · Launch · Scale</small></div>
-        <div className="landing-footer-column"><h2>Platform</h2><a href="#opportunities">For Freelancers</a><a href="#business">For Businesses</a><a href="#journey">Verify Skills</a><a href="#ecosystem">AI Features</a></div>
-        <div className="landing-footer-column"><h2>Support</h2><a href="#ecosystem">About OSF</a><a href="/contact" onClick={route('/contact')}>Talk to Us</a><a href="#community">Community Hub</a></div>
+        <div className="landing-footer-column"><h2>Platform</h2><a href="#opportunities">For Students</a><a href="#business">For Businesses</a><a href="#journey">Verify Skills</a><a href="#ecosystem">AI Features</a></div>
+        <div className="landing-footer-column"><h2>Support</h2><a href="#community">About OSF</a><a href="/contact" onClick={route('/contact')}>Talk to Us</a><a href="#hackathon">OSF Hackathon</a></div>
         <div className="landing-footer-column"><h2>Headquarters</h2><p>Navlakha, Indore,<br />Madhya Pradesh, 452001<br />India</p><a href="mailto:contact@ourstartupfreelancer.com">contact@ourstartupfreelancer.com</a><a href="tel:+919424871885">+91 94248 71885</a></div>
         <div className="landing-footer-bottom"><span>© {new Date().getFullYear()} Our Startup Freelancer. Empowering Indian talent.</span><span>Made with <b>♥</b> in Indore.</span></div>
       </footer>
