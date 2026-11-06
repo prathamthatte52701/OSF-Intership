@@ -99,3 +99,6 @@ applyMigration(2, () => db.exec(platformSchema));
 
 const submissionDraftMigration = readFileSync(new URL('./migrations/003_submission_drafts.sql', import.meta.url), 'utf8');
 applyMigration(3, () => db.exec(submissionDraftMigration));
+
+const profileVisibilityMigration = readFileSync(new URL('./migrations/004_student_profile_visibility.sql', import.meta.url), 'utf8');
+applyMigration(4, () => db.exec(profileVisibilityMigration));

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { InputError } from './validation.js';
 import { hashOtp, hashPassword, newId, newOtp, newSecret, otpMatches, sha256, validatePassword, verifyPassword } from './security.js';
-import { sendStudentOtpEmail } from './mail.js';
+import { sendStudentOtpEmail, sendStudentPasswordResetEmail } from './mail.js';
 import { failedLoginLimiter, loginBlockedMessage, sendTooMany } from './rateLimits.js';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -22,6 +22,10 @@ const studentOtpLifeMs = 5 * 60 * 1000;
 const studentOtpIpLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false,
   handler: (_req, res) => res.status(429).json({ error: 'If the account is eligible, a verification code will be sent. Try again later.' }),
+});
+const studentForgotIpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false,
+  handler: (_req, res) => res.status(429).json({ error: 'Too many reset requests. Try again later.' }),
 });
 const serverDir = dirname(fileURLToPath(import.meta.url));
 const uploadDir = resolve(serverDir, 'uploads');
@@ -113,8 +117,9 @@ function studentProfile(db, studentId, { privateFields = false, includeResume = 
   const fields = `${privateFields || includeResume ? ',s.resume_reference AS resumeReference' : ''},s.profile_image AS profileImage`;
   const profile = db.prepare(`SELECT s.id,s.full_name AS fullName${fields},s.college,s.degree,s.graduation_year AS graduationYear,
       s.about,s.github_url AS githubUrl,s.linkedin_url AS linkedinUrl,s.portfolio_url AS portfolioUrl,s.location,
-      s.created_at AS createdAt,s.updated_at AS updatedAt
+      s.created_at AS createdAt,s.updated_at AS updatedAt${privateFields ? ',s.profile_visible AS profileVisible' : ''}
     FROM students s WHERE s.id=?`).get(studentId);
+  if (profile && 'profileVisible' in profile) profile.profileVisible = Boolean(profile.profileVisible);
   if (profile) { profile.skills = listStudentSkills(db, studentId); profile.projects = listProjects(db, studentId); }
   return profile;
 }
@@ -338,6 +343,71 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     res.json({ loggedOut: true });
   });
 
+  const pwRule = 'Use at least 12 characters with uppercase, lowercase, a number and a special character.';
+  router.post('/student/auth/change-password', studentAuth, asyncRoute(async (req, res) => {
+    const { currentPassword, newPassword } = req.body || {};
+    if (typeof currentPassword !== 'string' || !currentPassword) throw new InputError('Enter your current password.');
+    if (!validatePassword(newPassword)) throw new InputError(pwRule);
+    const wait = failedLoginLimiter.blockedFor(req, req.student.email);
+    if (wait) return sendTooMany(res, wait, loginBlockedMessage);
+    const user = db.prepare('SELECT password_hash FROM student_users WHERE id=?').get(req.student.account_id);
+    if (!await verifyPassword(user.password_hash, currentPassword).catch(() => false)) {
+      failedLoginLimiter.fail(req, req.student.email);
+      throw new InputError('Your current password is incorrect.', 400);
+    }
+    failedLoginLimiter.reset(req, req.student.email);
+    const hash = await hashPassword(newPassword); const timestamp = nowIso();
+    db.transaction(() => {
+      db.prepare('UPDATE student_users SET password_hash=?,password_created_at=?,updated_at=? WHERE id=?').run(hash, timestamp, timestamp, req.student.account_id);
+      db.prepare('DELETE FROM student_sessions WHERE student_user_id=? AND token_hash<>?').run(req.student.account_id, req.student.token_hash);
+    })();
+    res.json({ changed: true });
+  }));
+  router.post('/student/auth/logout-all', studentAuth, (req, res) => {
+    db.prepare('DELETE FROM student_sessions WHERE student_user_id=?').run(req.student.account_id);
+    res.setHeader('Set-Cookie', `${studentCookie}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+    res.json({ loggedOut: true });
+  });
+  router.post('/student/auth/forgot-password', studentForgotIpLimiter, asyncRoute(async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const user = validEmail(email) ? db.prepare("SELECT id,email FROM student_users WHERE email=? COLLATE NOCASE AND email_verified=1 AND account_status='ACTIVE'").get(email) : null;
+    if (user) {
+      const current = nowMs();
+      const last = db.prepare('SELECT last_sent_at FROM student_otp_challenges WHERE student_user_id=?').get(user.id);
+      if (!last || current - last.last_sent_at >= 60 * 1000) {
+        const otp = newOtp();
+        db.prepare(`INSERT INTO student_otp_challenges(student_user_id,otp_hash,expires_at,attempts,resend_count,resend_window_started_at,last_sent_at)
+          VALUES (?,?,?,0,0,?,?) ON CONFLICT(student_user_id) DO UPDATE SET otp_hash=excluded.otp_hash,expires_at=excluded.expires_at,attempts=0,last_sent_at=excluded.last_sent_at`)
+          .run(user.id, hashOtp(otp).toString('hex'), current + studentOtpLifeMs, current, current);
+        try { await sendStudentPasswordResetEmail({ to: user.email, otp }); } catch { console.warn('Student password reset delivery failed.'); }
+      }
+    }
+    res.json({ message: 'If an active account exists for this email, a reset code has been sent.' });
+  }));
+  router.post('/student/auth/reset-password', asyncRoute(async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const { otp, newPassword } = req.body || {};
+    if (!validEmail(email) || typeof otp !== 'string' || !/^\d{6}$/.test(otp)) throw new InputError('Enter your account email and the six-digit reset code.');
+    if (!validatePassword(newPassword)) throw new InputError(pwRule);
+    const record = db.prepare(`SELECT su.id,o.otp_hash,o.expires_at,o.attempts FROM student_users su
+      JOIN student_otp_challenges o ON o.student_user_id=su.id
+      WHERE su.email=? COLLATE NOCASE AND su.email_verified=1 AND su.account_status='ACTIVE'`).get(email);
+    if (!record) throw new InputError('That reset code is invalid or has expired. Request a new one.', 400);
+    if (record.expires_at <= nowMs()) throw new InputError('That reset code is invalid or has expired. Request a new one.', 410);
+    if (record.attempts >= 5) throw new InputError('Too many incorrect attempts. Request a new code.', 429);
+    if (!otpMatches(otp, record.otp_hash)) {
+      db.prepare('UPDATE student_otp_challenges SET attempts=attempts+1 WHERE student_user_id=? AND attempts<5').run(record.id);
+      throw new InputError('That reset code is incorrect.', 400);
+    }
+    const hash = await hashPassword(newPassword); const timestamp = nowIso();
+    db.transaction(() => {
+      db.prepare('UPDATE student_users SET password_hash=?,password_created_at=?,updated_at=? WHERE id=?').run(hash, timestamp, timestamp, record.id);
+      db.prepare('DELETE FROM student_otp_challenges WHERE student_user_id=?').run(record.id);
+      db.prepare('DELETE FROM student_sessions WHERE student_user_id=?').run(record.id);
+    })();
+    res.json({ reset: true });
+  }));
+
   router.get('/student/profile', studentAuth, (req, res) => {
     const profile = req.student.student_id ? studentProfile(db, req.student.student_id, { privateFields: true }) : null;
     res.json({ profile });
@@ -348,8 +418,10 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     const graduationYear = body.graduationYear == null || body.graduationYear === '' ? null : Number(body.graduationYear);
     if (graduationYear != null && (!Number.isInteger(graduationYear) || graduationYear < 1950 || graduationYear > 2200)) throw new InputError('Graduation year must be between 1950 and 2200.');
     const skills = parseSkills(body.skills);
+    if (body.profileVisible != null && typeof body.profileVisible !== 'boolean') throw new InputError('Profile visibility must be true or false.');
     const timestamp = nowIso();
     const values = {
+      profileVisible: body.profileVisible == null ? null : body.profileVisible ? 1 : 0,
       fullName, profileImage: optionalUrl(body.profileImage, 'Profile image'), college: optionalText(body.college, 'College or university', 200),
       degree: optionalText(body.degree, 'Degree or course', 160), graduationYear,
       about: optionalText(body.about, 'About', 3000), resumeReference: optionalUrl(body.resumeReference, 'Resume URL'),
@@ -360,12 +432,12 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
       let id = req.student.student_id;
       if (!id) {
         id = newId();
-        db.prepare(`INSERT INTO students(id,account_id,full_name,profile_image,college,degree,graduation_year,about,resume_reference,github_url,linkedin_url,portfolio_url,location,created_at,updated_at)
-          VALUES (@id,@accountId,@fullName,@profileImage,@college,@degree,@graduationYear,@about,@resumeReference,@githubUrl,@linkedinUrl,@portfolioUrl,@location,@timestamp,@timestamp)`)
+        db.prepare(`INSERT INTO students(id,account_id,full_name,profile_image,college,degree,graduation_year,about,resume_reference,github_url,linkedin_url,portfolio_url,location,profile_visible,created_at,updated_at)
+          VALUES (@id,@accountId,@fullName,@profileImage,@college,@degree,@graduationYear,@about,@resumeReference,@githubUrl,@linkedinUrl,@portfolioUrl,@location,COALESCE(@profileVisible,1),@timestamp,@timestamp)`)
           .run({ ...values, id, accountId: req.student.account_id, timestamp });
       } else {
         db.prepare(`UPDATE students SET full_name=@fullName,profile_image=@profileImage,college=@college,degree=@degree,graduation_year=@graduationYear,
-          about=@about,resume_reference=@resumeReference,github_url=@githubUrl,linkedin_url=@linkedinUrl,portfolio_url=@portfolioUrl,location=@location,updated_at=@timestamp WHERE id=@id`)
+          about=@about,resume_reference=@resumeReference,github_url=@githubUrl,linkedin_url=@linkedinUrl,portfolio_url=@portfolioUrl,location=@location,profile_visible=COALESCE(@profileVisible,profile_visible),updated_at=@timestamp WHERE id=@id`)
           .run({ ...values, id, timestamp });
       }
       db.prepare('DELETE FROM student_skills WHERE student_id=?').run(id);

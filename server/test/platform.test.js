@@ -50,7 +50,7 @@ test('additive platform migration and student/company flows preserve ownership a
     rmSync(testDirectory, { recursive: true, force: true });
   });
 
-  assert.deepEqual(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(row => row.version), [1, 2, 3]);
+  assert.deepEqual(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(row => row.version), [1, 2, 3, 4]);
   assert.deepEqual(db.pragma('foreign_key_check'), []);
   const company = companySession('company-one', 'owner@one.example');
   const otherCompany = companySession('company-two', 'owner@two.example');

@@ -41,6 +41,12 @@ export function sendStudentOtpEmail({ to, otp }) {
     text: `Your OSF student account verification code is ${otp}. It expires in five minutes.` });
 }
 
+export function sendStudentPasswordResetEmail({ to, otp }) {
+  return send({ to, subject: 'Reset Your OSF Student Password', title: 'Reset your student password',
+    bodyHtml: `<p>Use this code to reset the password for your OSF student account.</p><p style="font-size:30px;letter-spacing:8px;font-weight:bold;background:#f2f5f8;padding:14px;text-align:center">${otp}</p><p>This code expires in five minutes. Ignore this email if you did not ask to reset your password.</p>`,
+    text: `Your OSF student password reset code is ${otp}. It expires in five minutes.` });
+}
+
 export function sendSetupEmail({ to, contactName, companyName, userId, setupUrl }) {
   const url = escapeHtml(setupUrl);
   return send({ to, subject: 'Set Up Your OSF Company Account', title: 'Your email is verified',
