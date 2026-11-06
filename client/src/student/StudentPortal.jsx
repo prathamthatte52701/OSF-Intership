@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { studentApi } from './studentApi.js';
+import { returnPath } from '../api.js';
 import { errorMessage, LoadingState, StudentIcon } from './StudentUI.jsx';
 import {
   ApplicationDetailsPage, ExploreChallengesPage, SkillVerificationPage,
@@ -43,7 +44,7 @@ export default function StudentPortal({ path, go }) {
 
   useEffect(() => {
     if (sessionLoading || sessionError) return;
-    if (session && authPaths.has(path)) { go('/student/dashboard'); return; }
+    if (session && authPaths.has(path)) { go(returnPath('/student/') || '/student/dashboard'); return; }
     if (!session && !authPaths.has(path)) { go('/student/login'); return; }
     if (!authPaths.has(path) && path !== '/student' && path !== '/student/dashboard'
       && !/^\/student\/(profile|challenges|applications|skills|settings)(\/|$)/.test(path)

@@ -198,9 +198,9 @@ export function ExploreChallengesPage({ go }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  async function load() {
+  async function load(skillFilter = skill) {
     setLoading(true); setError('');
-    try { const result = await studentApi.challenges({ skills: skill.trim() }); setChallenges(result.challenges || []); }
+    try { const result = await studentApi.challenges({ skills: skillFilter.trim() }); setChallenges(result.challenges || []); }
     catch (loadError) { setError(errorMessage(loadError)); }
     finally { setLoading(false); }
   }
@@ -216,8 +216,8 @@ export function ExploreChallengesPage({ go }) {
 
   return <>
     <PageTitle eyebrow="FIND YOUR NEXT STEP" title="Explore challenges" description="Explore published work from OSF companies and apply when the application window is open." />
-    <form className="sp-filter-bar" onSubmit={event => { event.preventDefault(); load(); }}><label className="sp-filter-search"><StudentIcon name="search" /><input aria-label="Search challenges" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search role, company or skill" /></label><Field label="Required skill" value={skill} onChange={event => setSkill(event.target.value)} maxLength={60} placeholder="Filter by skill" /><Field label="Compensation" as="select" value={paid} onChange={event => setPaid(event.target.value)}><option value="all">Any</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></Field><Field label="Sort by" as="select" value={sort} onChange={event => setSort(event.target.value)}><option value="closing">Closing soon</option><option value="newest">Recently published</option><option value="title">Role title</option></Field><button className="sp-button sp-button-primary" type="submit" disabled={loading}>{loading ? 'Loading…' : 'Apply filters'}</button></form>
-    {loading ? <LoadingState label="Loading published challenges…" /> : error ? <StateBlock title="Challenges couldn’t be loaded" tone="error" action={<button className="sp-button sp-button-secondary" onClick={load}>Retry</button>}>{error}</StateBlock> : visible.length ? <><div className="sp-results-count">{visible.length} published {visible.length === 1 ? 'challenge' : 'challenges'}</div><div className="sp-challenge-grid">{visible.map(challenge => <ChallengeCard key={challenge.id} challenge={challenge} onOpen={() => go(`/student/challenges/${encodeURIComponent(challenge.id)}`)} />)}</div></> : <StateBlock title={challenges.length ? 'No challenges match these filters' : 'No published challenges yet'} action={challenges.length ? <button className="sp-button sp-button-secondary" onClick={() => { setSearch(''); setSkill(''); setPaid('all'); load(); }}>Clear filters</button> : null}>{challenges.length ? 'Try a different title, skill or compensation filter.' : 'Published opportunities will appear here when companies open them.'}</StateBlock>}
+    <form className="sp-filter-bar" onSubmit={event => { event.preventDefault(); load(skill); }}><label className="sp-filter-search"><StudentIcon name="search" /><input aria-label="Search challenges" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search role, company or skill" /></label><Field label="Required skill" value={skill} onChange={event => setSkill(event.target.value)} maxLength={60} placeholder="Filter by skill" /><Field label="Compensation" as="select" value={paid} onChange={event => setPaid(event.target.value)}><option value="all">Any</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></Field><Field label="Sort by" as="select" value={sort} onChange={event => setSort(event.target.value)}><option value="closing">Closing soon</option><option value="newest">Recently published</option><option value="title">Role title</option></Field><button className="sp-button sp-button-primary" type="submit" disabled={loading}>{loading ? 'Loading…' : 'Apply filters'}</button></form>
+    {loading ? <LoadingState label="Loading published challenges…" /> : error ? <StateBlock title="Challenges couldn’t be loaded" tone="error" action={<button className="sp-button sp-button-secondary" onClick={() => load(skill)}>Retry</button>}>{error}</StateBlock> : visible.length ? <><div className="sp-results-count">{visible.length} published {visible.length === 1 ? 'challenge' : 'challenges'}</div><div className="sp-challenge-grid">{visible.map(challenge => <ChallengeCard key={challenge.id} challenge={challenge} onOpen={() => go(`/student/challenges/${encodeURIComponent(challenge.id)}`)} />)}</div></> : <StateBlock title={challenges.length ? 'No challenges match these filters' : 'No published challenges yet'} action={challenges.length ? <button className="sp-button sp-button-secondary" onClick={() => { setSearch(''); setSkill(''); setPaid('all'); setSort('closing'); load(''); }}>Clear filters</button> : null}>{challenges.length ? 'Try a different title, skill or compensation filter.' : 'Published opportunities will appear here when companies open them.'}</StateBlock>}
   </>;
 }
 
@@ -348,7 +348,28 @@ function SubmissionPanel({ application, submission, canEdit, isSubmitted, onSave
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
-  useEffect(() => { setForm({ githubUrl: submission?.githubUrl || '', deployedUrl: submission?.deployedUrl || '', supportingInformation: submission?.supportingInformation || '', fileReference: submission?.fileReference || '' }); setFileName(submission?.file?.name || ''); }, [submission?.id, submission?.updatedAt, submission?.fileReference, submission?.file?.name]);
+  const [draftNote, setDraftNote] = useState('');
+  const draftTimer = useRef(null);
+  const lastDraft = useRef('');
+  const draftKey = form => JSON.stringify([form.githubUrl, form.deployedUrl, form.supportingInformation]);
+  useEffect(() => { lastDraft.current = draftKey({ githubUrl: submission?.githubUrl || '', deployedUrl: submission?.deployedUrl || '', supportingInformation: submission?.supportingInformation || '' }); setForm({ githubUrl: submission?.githubUrl || '', deployedUrl: submission?.deployedUrl || '', supportingInformation: submission?.supportingInformation || '', fileReference: submission?.fileReference || '' }); setFileName(submission?.file?.name || ''); }, [submission?.id, submission?.updatedAt, submission?.fileReference, submission?.file?.name]);
+
+  // Debounced (1.5s) draft autosave; failures are swallowed so they can never block or poison a later full submit.
+  const autosaveActive = canEdit && !isSubmitted && application.status === 'IN_PROGRESS';
+  useEffect(() => {
+    if (!autosaveActive || saving) return undefined;
+    const key = draftKey(form);
+    if (key === lastDraft.current || !validUrl(form.githubUrl) || !validUrl(form.deployedUrl)) return undefined;
+    draftTimer.current = window.setTimeout(() => {
+      draftTimer.current = null;
+      setDraftNote('Saving draft…');
+      studentApi.saveDraft(application.id, form).then(
+        () => { lastDraft.current = key; setDraftNote('Draft saved.'); },
+        () => setDraftNote('Draft not saved. Your work stays here; submit still works.'),
+      );
+    }, 1500);
+    return () => { if (draftTimer.current) { window.clearTimeout(draftTimer.current); draftTimer.current = null; } };
+  }, [form.githubUrl, form.deployedUrl, form.supportingInformation, autosaveActive, saving]);
 
   async function download() {
     setError(''); setSaved(''); setDownloading(true);
@@ -378,6 +399,7 @@ function SubmissionPanel({ application, submission, canEdit, isSubmitted, onSave
     event.preventDefault(); setError(''); setSaved('');
     if (!validUrl(form.githubUrl) || !validUrl(form.deployedUrl)) return setError('Use a valid HTTP or HTTPS URL for each link.');
     if (!form.githubUrl && !form.deployedUrl && !form.supportingInformation.trim() && !form.fileReference) return setError('Add a repository, deployed link, file, or supporting information.');
+    if (draftTimer.current) { window.clearTimeout(draftTimer.current); draftTimer.current = null; }
     setSaving(true);
     try { const result = await studentApi.submitWork(application.id, form); await onSaved(result.submission); }
     catch (submitError) { setError(errorMessage(submitError)); }
@@ -390,7 +412,7 @@ function SubmissionPanel({ application, submission, canEdit, isSubmitted, onSave
       <div className="sp-upload-row"><label className="sp-field"><span>Submission file</span><input type="file" accept=".pdf,.txt,.zip,.png,.jpg,.jpeg,application/pdf,text/plain,application/zip,image/png,image/jpeg" onChange={event => { setSelectedFile(event.target.files?.[0] || null); setError(''); }} /><small>PDF, TXT, ZIP, PNG or JPG · up to 10 MB</small></label><button className="sp-button sp-button-secondary" type="button" onClick={upload} disabled={!selectedFile || uploading}>{uploading ? 'Uploading…' : 'Upload file'}</button></div>
       {form.fileReference && <div className="sp-uploaded-file"><StudentIcon name="file" size={16} /><span>{fileName || 'Uploaded file'}</span><button className="sp-button sp-button-secondary" type="button" onClick={download} disabled={downloading}>{downloading ? 'Downloading…' : 'Download'}</button><StatusPill tone="success">Ready</StatusPill></div>}
       {error && <div className="student-alert student-alert-error" role="alert">{error}</div>}{saved && <div className="student-alert student-alert-success" role="status">{saved}</div>}
-      <div className="sp-form-actions"><span>OSF confirms the submission after the server accepts it.</span><button className="sp-button sp-button-primary" type="submit" disabled={saving || uploading}>{saving ? 'Submitting…' : isSubmitted ? 'Update submission' : 'Submit work'}</button></div>
+      <div className="sp-form-actions"><span>{draftNote || 'OSF confirms the submission after the server accepts it.'}</span><button className="sp-button sp-button-primary" type="submit" disabled={saving || uploading}>{saving ? 'Submitting…' : isSubmitted ? 'Update submission' : 'Submit work'}</button></div>
     </form>}
   </section>;
 }
@@ -480,6 +502,15 @@ export function AssessmentPage({ assessmentId, go, notify }) {
     update(); const timer = window.setInterval(update, 1000); return () => window.clearInterval(timer);
   }, [attempt?.id, attempt?.startedAt, attempt?.durationMinutes, attempt?.status]);
 
+  // Re-sync with the server clock/state whenever the tab regains attention (timers throttle in background tabs).
+  useEffect(() => {
+    if (!attempt?.id || attempt.status !== 'IN_PROGRESS') return undefined;
+    const resync = () => { if (document.visibilityState !== 'hidden') studentApi.attempt(attempt.id).then(result => acceptAttempt(result.attempt)).catch(() => {}); };
+    document.addEventListener('visibilitychange', resync);
+    window.addEventListener('focus', resync);
+    return () => { document.removeEventListener('visibilitychange', resync); window.removeEventListener('focus', resync); };
+  }, [attempt?.id, attempt?.status]);
+
   function selectAnswer(questionId, selectedOption) {
     const snapshot = { ...answersRef.current, [questionId]: selectedOption };
     answersRef.current = snapshot;
@@ -494,6 +525,7 @@ export function AssessmentPage({ assessmentId, go, notify }) {
       return result;
     }, saveError => {
       if (sequence === saveSequence.current) { setSaveState('error'); setError(`Answer not saved: ${errorMessage(saveError)}`); }
+      if (saveError.status === 409) studentApi.attempt(attempt.id).then(result => acceptAttempt(result.attempt)).catch(() => {});
       throw saveError;
     });
     saveQueue.current.catch(() => {});
@@ -508,7 +540,7 @@ export function AssessmentPage({ assessmentId, go, notify }) {
   async function submit(event) {
     event.preventDefault(); setBusy(true); setError('');
     try {
-      await saveQueue.current;
+      await saveQueue.current.catch(() => {});
       const result = await studentApi.submitAnswers(attempt.id, Object.entries(answersRef.current).map(([questionId, selectedOption]) => ({ questionId, selectedOption })));
       acceptAttempt(result.attempt); notify('success', 'Your answers were submitted for company review.');
     } catch (submitError) { setError(errorMessage(submitError)); if (submitError.status === 409) { const refreshed = await studentApi.attempt(attempt.id).catch(() => null); if (refreshed) acceptAttempt(refreshed.attempt); else await load(); } }

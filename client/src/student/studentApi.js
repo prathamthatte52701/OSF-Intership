@@ -1,3 +1,5 @@
+import { handleUnauthorized } from '../api.js';
+
 const jsonHeaders = { 'Content-Type': 'application/json' };
 
 async function request(path, options = {}) {
@@ -12,6 +14,7 @@ async function request(path, options = {}) {
       : result.error || 'The request could not be completed.');
     error.status = response.status;
     error.retryAfter = retryAfter;
+    if (response.status === 401) handleUnauthorized('student', path);
     throw error;
   }
   return result;
@@ -19,6 +22,9 @@ async function request(path, options = {}) {
 
 const post = (path, body = {}) => request(path, { method: 'POST', body: JSON.stringify(body) });
 const put = (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) });
+
+// Only profile columns go to PUT /student/profile (projects etc. would bloat the body past the 32KB limit).
+const PROFILE_FIELDS = ['fullName', 'profileImage', 'college', 'degree', 'graduationYear', 'about', 'skills', 'resumeReference', 'githubUrl', 'linkedinUrl', 'portfolioUrl', 'location', 'profileVisible'];
 
 export const studentApi = {
   register: ({ email, password }) => post('/student/auth/register', { email, password }),
@@ -32,7 +38,7 @@ export const studentApi = {
   session: () => request('/student/auth/session'),
   logout: () => post('/student/auth/logout'),
   profile: () => request('/student/profile'),
-  updateProfile: profile => put('/student/profile', profile),
+  updateProfile: profile => put('/student/profile', Object.fromEntries(PROFILE_FIELDS.filter(key => profile[key] !== undefined).map(key => [key, profile[key]]))),
   createProject: project => post('/student/projects', project),
   updateProject: (id, project) => put(`/student/projects/${encodeURIComponent(id)}`, project),
   deleteProject: id => request(`/student/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }),
@@ -66,6 +72,7 @@ export const studentApi = {
       method: 'PUT', body: file, headers: { 'Content-Type': mimeType || 'application/octet-stream', 'X-File-Name': safeName, 'X-File-Mime': mimeType },
     });
   },
+  saveDraft: (id, draft) => put(`/student/applications/${encodeURIComponent(id)}/draft`, { githubUrl: draft.githubUrl, deployedUrl: draft.deployedUrl, supportingInformation: draft.supportingInformation }),
   submitWork: (id, submission) => put(`/student/applications/${encodeURIComponent(id)}/submission`, submission),
   assessments: () => request('/student/assessments'),
   assessment: id => request(`/student/assessments/${encodeURIComponent(id)}`),

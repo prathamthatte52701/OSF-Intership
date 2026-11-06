@@ -6,7 +6,7 @@ import LandingPage from './LandingPage.jsx';
 import StudentPortal from './student/StudentPortal.jsx';
 import CompanyPortal from './company/CompanyPortal.jsx';
 import { citiesForState, INDIAN_STATES, normalizeIndianPhone } from './india.js';
-import { api } from './api.js';
+import { api, returnPath } from './api.js';
 import './styles.css';
 
 /* SVG Icon Component */
@@ -226,9 +226,10 @@ function App() {
     }
   }, []);
 
-  const go = path => {
-    const depth = history.state?.osfPortalRoute ? history.state.depth + 1 : 1;
-    history.pushState({ osfPortalRoute: true, depth }, '', path);
+  const go = (path, { replace = false } = {}) => {
+    const depth = history.state?.osfPortalRoute ? history.state.depth + (replace ? 0 : 1) : (replace ? 0 : 1);
+    if (replace) history.replaceState({ osfPortalRoute: true, depth }, '', path);
+    else history.pushState({ osfPortalRoute: true, depth }, '', path);
     setPage(path);
     setErrors({});
     setNotice('');
@@ -248,16 +249,16 @@ function App() {
 
       if (p.startsWith('/dashboard') && !session) {
         p = '/login';
-        history.replaceState({}, '', p);
+        history.replaceState(history.state, '', p);
       } else if (p.startsWith('/dashboard') && account?.mustChangePassword) {
         p = '/change-password';
-        history.replaceState({}, '', p);
+        history.replaceState(history.state, '', p);
       } else if (p === '/change-password' && !session) {
         p = '/login';
-        history.replaceState({}, '', p);
+        history.replaceState(history.state, '', p);
       } else if (p === '/verify-email' && !pendingRegistration) {
         p = '/register';
-        history.replaceState({}, '', p);
+        history.replaceState(history.state, '', p);
       }
 
       setPage(p);
@@ -478,7 +479,7 @@ function App() {
         userId: result.userId,
         profile: toUiProfile(profile.company),
       });
-      go('/dashboard');
+      go(returnPath('/dashboard') || '/dashboard');
       notify('success', 'Welcome back to your workspace.');
     } catch (error) {
       notify('error', error.message);
@@ -587,6 +588,11 @@ function App() {
         target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
       );
 
+      // The portals own Esc/Backspace (dialogs, forms); never navigate away from them, and never while a dialog is open.
+      const inPortal = location.pathname.startsWith('/dashboard/') || location.pathname.startsWith('/student/');
+      const dialogOpen = Boolean(document.querySelector('[role="dialog"], dialog[open]'));
+      const blockBack = inPortal || dialogOpen;
+
       if (event.key === 'Escape') {
         if (showPassword) {
           setShowPassword(false);
@@ -596,14 +602,14 @@ function App() {
           setShowSetupRecovery(false);
           return;
         }
-        if (!isEditable && page !== '/' && history.state?.osfPortalRoute && history.state.depth > 0) {
+        if (!blockBack && !isEditable && page !== '/' && history.state?.osfPortalRoute && history.state.depth > 0) {
           event.preventDefault();
           history.back();
         }
         return;
       }
 
-      if (event.key === 'Backspace' && !isEditable && history.state?.osfPortalRoute && history.state.depth > 0) {
+      if (event.key === 'Backspace' && !blockBack && !isEditable && history.state?.osfPortalRoute && history.state.depth > 0) {
         event.preventDefault();
         history.back();
         return;

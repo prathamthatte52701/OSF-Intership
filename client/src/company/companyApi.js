@@ -1,3 +1,5 @@
+import { handleUnauthorized } from '../api.js';
+
 const jsonHeaders = { 'Content-Type': 'application/json' };
 
 async function request(path, options = {}) {
@@ -7,6 +9,7 @@ async function request(path, options = {}) {
   if (!response.ok) {
     const error = new Error(result.error || 'The request could not be completed.');
     error.status = response.status;
+    if (response.status === 401) handleUnauthorized('company', path);
     error.retryAfter = Number(response.headers.get('Retry-After')) || 0;
     throw error;
   }

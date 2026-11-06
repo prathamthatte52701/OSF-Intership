@@ -13,9 +13,26 @@ async function request(path, options = {}) {
       : result.error || 'The request could not be completed.');
     error.status = response.status;
     error.retryAfter = retryAfter;
+    if (response.status === 401) handleUnauthorized('company', path);
     throw error;
   }
   return result;
+}
+
+/* Global 401 hook: a stale session anywhere in a portal sends the user to that portal's login with a return path.
+   Auth endpoints are skipped (a wrong password is also a 401). A full navigation also drops all in-memory session state. */
+export function handleUnauthorized(kind, apiPath) {
+  if (/^\/(student\/)?auth\//.test(apiPath) || apiPath.startsWith('/registrations')) return;
+  const loginPath = kind === 'student' ? '/student/login' : '/login';
+  if (location.pathname === loginPath) return;
+  const here = location.pathname + location.search;
+  location.assign(`${loginPath}?next=${encodeURIComponent(here)}`);
+}
+
+/* Returns the ?next= return path only when it stays inside the given portal prefix. */
+export function returnPath(prefix) {
+  const next = new URLSearchParams(location.search).get('next') || '';
+  return next.startsWith(prefix) && !next.startsWith('//') && !next.includes('\\') ? next : null;
 }
 
 const post = (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) });

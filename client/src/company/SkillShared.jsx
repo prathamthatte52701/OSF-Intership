@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import './skills.css';
+import { useDialog } from '../ui/useDialog.js';
 
 export const fmtDate = iso => {
   if (!iso) return '—';
@@ -22,21 +23,15 @@ export function ErrorState({ message, onRetry }) {
 }
 
 export function ConfirmDialog({ title, text, confirmLabel, busy, onConfirm, onCancel }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    ref.current?.focus();
-    const onKey = e => { if (e.key === 'Escape') onCancel(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  const ref = useDialog({ onCancel, busy });
   return (
-    <div className="confirm-dialog-overlay" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="confirm-dialog">
-        <strong>{title}</strong>
-        <p>{text}</p>
+    <div className="confirm-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-text">
+      <div className="confirm-dialog" ref={ref}>
+        <strong id="confirm-dialog-title">{title}</strong>
+        <p id="confirm-dialog-text">{text}</p>
         <div className="confirm-dialog-actions">
           <button className="btn btn-outline btn-sm" onClick={onCancel} disabled={busy}>Cancel</button>
-          <button ref={ref} className="btn btn-primary btn-sm" onClick={onConfirm} disabled={busy}>{confirmLabel}</button>
+          <button className="btn btn-primary btn-sm" onClick={onConfirm} disabled={busy}>{confirmLabel}</button>
         </div>
       </div>
     </div>
