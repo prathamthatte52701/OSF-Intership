@@ -1,7 +1,14 @@
 import React from 'react';
 import CompanyProfile from '../CompanyProfile.jsx';
 import LiveChallengePage from './LiveChallengePage.jsx';
+import TalentDiscoveryPage from './TalentDiscoveryPage.jsx';
 import ChallengeFormPage from './ChallengeFormPage.jsx';
+import ChallengeApplicantsPage from './ChallengeApplicantsPage.jsx';
+import ApplicationDetailPage from './ApplicationDetailPage.jsx';
+import CompanyStudentProfilePage from './CompanyStudentProfilePage.jsx';
+import SkillVerificationPage from './SkillVerificationPage.jsx';
+import AssessmentFormPage from './AssessmentFormPage.jsx';
+import { AttemptsList, AttemptDetail } from './AssessmentAttemptsPage.jsx';
 import { companyApi } from './companyApi.js';
 import './company.css';
 
@@ -37,6 +44,8 @@ const MODULES = [
 ];
 
 function moduleForPath(path) {
+  // applicant review pages live under the Live Challenge module
+  if (/^\/dashboard\/(applications|students)\/[^/]+$/.test(path)) return MODULES[0];
   return MODULES.find(item => path === item.path || path.startsWith(`${item.path}/`)) || null;
 }
 
@@ -88,8 +97,9 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
           : `${companyName} · the roles you publish for student applicants`;
       case 'Company Profile':
         return 'Keep your enterprise details current so students see an accurate listing.';
-      case 'Skill Verification':
       case 'Talent Discovery':
+        return 'Find students by skill and college, save the ones worth a conversation.';
+      case 'Skill Verification':
         return 'Coming in the next step of the company portal.';
       default:
         return undefined;
@@ -161,6 +171,11 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
                 New challenge
               </button>
             )}
+            {path === '/dashboard/skills' && (
+              <button className="btn btn-primary btn-sm" onClick={() => go('/dashboard/skills/new')}>
+                New assessment
+              </button>
+            )}
           </div>
         </header>
 
@@ -188,8 +203,22 @@ export default function CompanyPortal({ path, go, account, logout, onProfileUpda
             />
           )}
 
-          {path === '/dashboard/skills' && <EmptyModule title="Skill Verification" />}
-          {path === '/dashboard/talent' && <EmptyModule title="Talent Discovery" />}
+          {/^\/dashboard\/challenges\/[^/]+\/applicants$/.test(path) && (
+            <ChallengeApplicantsPage go={go} challengeId={decodeURIComponent(/^\/dashboard\/challenges\/([^/]+)\/applicants$/.exec(path)[1])} />
+          )}
+          {/^\/dashboard\/applications\/[^/]+$/.test(path) && (
+            <ApplicationDetailPage go={go} applicationId={decodeURIComponent(/^\/dashboard\/applications\/([^/]+)$/.exec(path)[1])} />
+          )}
+          {/^\/dashboard\/students\/[^/]+$/.test(path) && (
+            <CompanyStudentProfilePage go={go} studentId={decodeURIComponent(/^\/dashboard\/students\/([^/]+)$/.exec(path)[1])} />
+          )}
+
+          {path === '/dashboard/skills' && <SkillVerificationPage go={go} />}
+          {path === '/dashboard/skills/new' && <AssessmentFormPage go={go} />}
+          {/^\/dashboard\/skills\/[^/]+\/edit$/.test(path) && <AssessmentFormPage key={path} go={go} assessmentId={decodeURIComponent(path.split('/')[3])} />}
+          {/^\/dashboard\/skills\/[^/]+\/attempts$/.test(path) && <AttemptsList go={go} assessmentId={decodeURIComponent(path.split('/')[3])} />}
+          {/^\/dashboard\/skills\/[^/]+\/attempts\/[^/]+$/.test(path) && <AttemptDetail go={go} assessmentId={decodeURIComponent(path.split('/')[3])} attemptId={decodeURIComponent(path.split('/')[5])} />}
+          {path === '/dashboard/talent' && <TalentDiscoveryPage go={go} />}
 
           {path === '/dashboard/company' && (
             <CompanyProfile profile={account?.profile} onSaved={onProfileUpdated} />

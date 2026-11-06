@@ -402,3 +402,23 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Company profile */
+.cp-profile { max-width: 880px; display: grid; gap: 16px; }
+.cp-profile .cp-page-header { margin-bottom: 8px; }
+.cp-profile .cp-page-header h2 { font-size: 28px; }
+.cp-profile-stack { display: grid; gap: 16px; }
+.cp-section-head { display: flex; align-items: center; justify-content: space-between; color: var(--text-secondary); }
+.cp-section-head .cp-card-title { margin-bottom: 16px; color: var(--text-primary); }
+.cp-view-grid, .cp-form-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+.cp-view-grid .cp-view-row span { font-weight: 500; }
+.cp-form-cols .cp-field { margin-bottom: 0; }
+.cp-span-2 { grid-column: span 2; }
+.cp-field > label { color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+.cp-field > .cp-field-error { font-weight: 400; }
+.cp-form-cols + .alert { margin-top: 24px; }
+.cp-helper { margin-top: 4px; font-size: 13px; color: var(--text-secondary); }
+@media (max-width: 640px) {
+  .cp-view-grid, .cp-form-cols { grid-template-columns: 1fr; }
+  .cp-span-2 { grid-column: auto; }
+}

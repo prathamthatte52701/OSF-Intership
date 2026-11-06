@@ -605,7 +605,11 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   router.get('/company/challenges/:id/applications', companyAuth, (req, res) => {
     const challenge = ownedChallenge(db, req.params.id, req.session.company_id);
     const rows = db.prepare(`SELECT a.id,a.student_id AS studentId,a.applied_at AS appliedAt,a.individual_deadline AS individualDeadline,a.status,
-      s.full_name AS fullName,s.college,s.degree FROM applications a JOIN students s ON s.id=a.student_id WHERE a.challenge_id=? ORDER BY a.applied_at DESC`).all(challenge.id);
+      s.full_name AS fullName,s.college,s.degree,
+      (SELECT submitted_at FROM submissions WHERE application_id=a.id) AS submittedAt,
+      COALESCE((SELECT is_shortlisted FROM evaluations WHERE application_id=a.id),0) AS isShortlisted
+      FROM applications a JOIN students s ON s.id=a.student_id WHERE a.challenge_id=? ORDER BY a.applied_at DESC`).all(challenge.id)
+      .map(row => ({ ...row, isShortlisted: Boolean(row.isShortlisted), skills: listStudentSkills(db, row.studentId) }));
     const applications = rows.map(row => {
       if (row.status !== 'SUBMITTED' && Date.parse(row.individualDeadline) <= nowMs()) {
         db.prepare("UPDATE applications SET status='EXPIRED',updated_at=? WHERE id=? AND status<>'SUBMITTED'").run(nowIso(), row.id);
@@ -623,6 +627,14 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
     if (submission?.fileReference) submission.file = fileMetadata(db, application.id, submission.fileReference) ? { id: submission.fileReference } : null;
     const evaluation = db.prepare('SELECT id,rating,feedback,is_shortlisted AS isShortlisted,evaluated_at AS evaluatedAt FROM evaluations WHERE application_id=?').get(application.id) || null;
     res.json({ application: { id: application.id, challengeId: application.challenge_id, appliedAt: application.applied_at, individualDeadline: application.individual_deadline, status: application.status, student: profile, submission, evaluation } });
+  });
+  // Full profile + contact email, only for students who applied to one of this company's challenges.
+  router.get('/company/applications/:id/student', companyAuth, (req, res) => {
+    const application = ownedApplication(db, req.params.id, req.session.company_id);
+    const profile = studentProfile(db, application.student_id, { includeResume: true });
+    if (!profile) throw new InputError('Application not found.', 404);
+    profile.contactEmail = db.prepare('SELECT u.email FROM students s JOIN student_users u ON u.id=s.account_id WHERE s.id=?').get(application.student_id)?.email || null;
+    res.json({ student: profile });
   });
   router.get('/company/applications/:id/file', companyAuth, (req, res) => {
     const application = ownedApplication(db, req.params.id, req.session.company_id);
@@ -738,7 +750,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
   router.put('/company/applications/:id/evaluation', companyAuth, (req, res) => {
     const application = ownedApplication(db, req.params.id, req.session.company_id);
-    if (!db.prepare('SELECT 1 FROM submissions WHERE application_id=?').get(application.id)) throw new InputError('Submit a task before evaluating this application.', 409);
+    if (application.status !== 'SUBMITTED' || !db.prepare('SELECT 1 FROM submissions WHERE application_id=? AND submitted_at IS NOT NULL').get(application.id)) throw new InputError('Only a submitted application can be evaluated.');
     const body = req.body || {};
     const rating = body.rating == null || body.rating === '' ? null : Number(body.rating);
     if (rating != null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) throw new InputError('Rating must be a whole number from 1 to 5.');
@@ -773,6 +785,7 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
   router.put('/company/assessments/:id', companyAuth, (req, res) => {
     const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    if (assessment.status !== 'DRAFT') throw new InputError('Only draft assessments can be edited.', 400);
     const title = requiredText(req.body?.title ?? assessment.title, 'Assessment title', 150);
     const relatedSkill = requiredText(req.body?.relatedSkill ?? assessment.related_skill, 'Related skill', 80);
     const duration = req.body?.durationMinutes === undefined ? assessment.duration_minutes : req.body.durationMinutes === null || req.body.durationMinutes === '' ? null : Number(req.body.durationMinutes);
@@ -944,32 +957,44 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
   });
 
   // Company talent discovery uses indexed stored skills and returns the transparent overlap.
+  // Hidden profiles (profile_visible=0) are only visible to companies whose challenges the student applied to.
+  const VISIBLE_TO_COMPANY = `(s.profile_visible=1 OR EXISTS (SELECT 1 FROM applications a JOIN challenges c ON c.id=a.challenge_id WHERE a.student_id=s.id AND c.company_id=?))`;
   router.get('/company/talent', companyAuth, (req, res) => {
-    const requestedSkills = typeof req.query.skills === 'string' ? req.query.skills.split(',').map(value => text(value, 60)).filter(Boolean).slice(0, 20) : [];
+    const requestedSkills = [...new Map((typeof req.query.skills === 'string' ? req.query.skills.split(',').map(value => text(value, 60)).filter(Boolean).slice(0, 20) : []).map(skill => [skill.toLowerCase(), skill])).values()];
     const college = typeof req.query.college === 'string' ? text(req.query.college, 200) : '';
-    const clauses = [];
-    const params = [];
+    const limit = Math.min(Math.max(Math.trunc(Number(req.query.limit)) || 24, 1), 50);
+    const offset = Math.max(Math.trunc(Number(req.query.offset)) || 0, 0);
+    const companyId = req.session.company_id;
+    const clauses = [VISIBLE_TO_COMPANY];
+    const params = [companyId];
     if (college) { clauses.push('s.college LIKE ? ESCAPE \'\\\' COLLATE NOCASE'); params.push(`%${college.replace(/[\\%_]/g, '\\$&')}%`); }
+    const marks = requestedSkills.map(() => '?').join(',');
     if (requestedSkills.length) {
-      clauses.push(`EXISTS (SELECT 1 FROM student_skills ss WHERE ss.student_id=s.id AND ss.skill IN (${requestedSkills.map(() => '?').join(',')} COLLATE NOCASE))`);
+      clauses.push(`EXISTS (SELECT 1 FROM student_skills ss WHERE ss.student_id=s.id AND ss.skill COLLATE NOCASE IN (${marks}))`);
       params.push(...requestedSkills);
     }
-    const rows = db.prepare(`SELECT s.id FROM students s ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''} ORDER BY s.updated_at DESC LIMIT 100`).all(...params);
+    const where = clauses.join(' AND ');
+    const total = db.prepare(`SELECT COUNT(*) AS n FROM students s WHERE ${where}`).get(...params).n;
+    const matchExpr = requestedSkills.length ? `(SELECT COUNT(DISTINCT lower(ss.skill)) FROM student_skills ss WHERE ss.student_id=s.id AND ss.skill COLLATE NOCASE IN (${marks}))` : '0';
+    // Sort by match count first, then paginate, so LIMIT/OFFSET apply to the ranked list.
+    const rows = db.prepare(`SELECT s.id, ${matchExpr} AS matchCount FROM students s WHERE ${where} ORDER BY matchCount DESC, s.updated_at DESC, s.id LIMIT ? OFFSET ?`)
+      .all(...(requestedSkills.length ? requestedSkills : []), ...params, limit, offset);
     const students = rows.map(row => {
       const profile = studentProfile(db, row.id, { includeResume: true });
       const matchedSkills = requestedSkills.filter(skill => profile.skills.some(known => known.toLowerCase() === skill.toLowerCase()));
-      return { ...profile, matchedSkills, matchCount: matchedSkills.length };
-    }).sort((a, b) => b.matchCount - a.matchCount);
-    res.json({ students, matchBasis: requestedSkills.length ? 'Number of requested skills found on the profile; ties use most recently updated profile.' : 'Most recently updated student profiles.' });
+      return { ...profile, matchedSkills, matchCount: row.matchCount };
+    });
+    res.json({ students, total, limit, offset, matchBasis: requestedSkills.length ? 'Number of requested skills found on the profile; ties use most recently updated profile.' : 'Most recently updated student profiles.' });
   });
   router.get('/company/talent/:id', companyAuth, (req, res) => {
-    const profile = studentProfile(db, req.params.id, { includeResume: true });
+    const visible = db.prepare(`SELECT 1 FROM students s WHERE s.id=? AND ${VISIBLE_TO_COMPANY}`).get(req.params.id, req.session.company_id);
+    const profile = visible && studentProfile(db, req.params.id, { includeResume: true });
     if (!profile) throw new InputError('Student profile not found.', 404);
     res.json({ profile });
   });
   router.get('/company/saved-students', companyAuth, (req, res) => {
-    const rows = db.prepare('SELECT student_id FROM saved_students WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
-    res.json({ students: rows.map(({ student_id: id }) => ({ ...studentProfile(db, id, { includeResume: true }), savedAt: db.prepare('SELECT created_at FROM saved_students WHERE company_id=? AND student_id=?').get(req.session.company_id, id).created_at })) });
+    const rows = db.prepare('SELECT student_id,note,created_at FROM saved_students WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
+    res.json({ students: rows.map(row => ({ ...studentProfile(db, row.student_id, { includeResume: true }), note: row.note, savedAt: row.created_at })) });
   });
   router.post('/company/saved-students/:studentId', companyAuth, (req, res) => {
     if (!db.prepare('SELECT 1 FROM students WHERE id=?').get(req.params.studentId)) throw new InputError('Student profile not found.', 404);
@@ -990,7 +1015,8 @@ export function createPlatformRouter({ db, requireCompanyAuth }) {
 function companyAssessment(db, id) {
   const row = db.prepare('SELECT * FROM skill_assessments WHERE id=?').get(id);
   return { id: row.id, title: row.title, description: row.description, relatedSkill: row.related_skill, instructions: row.instructions,
-    durationMinutes: row.duration_minutes, status: row.status, questions: db.prepare('SELECT id,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,correct_answer AS correctAnswer,question_order AS questionOrder FROM skill_assessment_questions WHERE assessment_id=? ORDER BY question_order').all(id) };
+    durationMinutes: row.duration_minutes, status: row.status, createdAt: row.created_at,
+    attemptCount: db.prepare('SELECT COUNT(*) AS n FROM skill_assessment_attempts WHERE assessment_id=?').get(id).n, questions: db.prepare('SELECT id,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,correct_answer AS correctAnswer,question_order AS questionOrder FROM skill_assessment_questions WHERE assessment_id=? ORDER BY question_order').all(id) };
 }
 function companyQuestion(db, id) {
   return db.prepare('SELECT id,assessment_id AS assessmentId,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,correct_answer AS correctAnswer,question_order AS questionOrder FROM skill_assessment_questions WHERE id=?').get(id);

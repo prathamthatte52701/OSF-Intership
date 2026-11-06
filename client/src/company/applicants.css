@@ -1,0 +1,38 @@
+/* Applicant list, application detail, and student profile (T10). Reuses cp- and dash tokens. */
+.ap-crumbs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
+.ap-crumbs button { background: none; border: none; padding: 0; color: var(--text-secondary); font: inherit; cursor: pointer; border-radius: 4px; }
+.ap-crumbs button:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+@media (hover: hover) { .ap-crumbs button:hover { color: var(--text-primary); text-decoration: underline; } }
+.ap-title { font-size: 28px; font-weight: 600; margin: 0 0 4px; }
+.ap-sub { margin: 0; font-size: 15px; color: var(--text-secondary); }
+.ap-head { margin-bottom: 24px; }
+.ap-counts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ap-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
+.ap-toolbar .cp-field { margin: 0; min-width: 160px; }
+.ap-toolbar .cp-field-checkbox { align-self: center; }
+.ap-person { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ap-avatar { width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--bg-surface-sunken); color: var(--text-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+.ap-link { background: none; border: none; padding: 0; font: inherit; font-weight: 600; color: var(--text-primary); cursor: pointer; text-align: left; border-radius: 4px; }
+.ap-link:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+@media (hover: hover) { .ap-link:hover { text-decoration: underline; } }
+.ap-star { color: var(--text-muted); font-size: 15px; }
+.ap-star.on { color: var(--text-primary); }
+.ap-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 860px) { .ap-grid { grid-template-columns: minmax(0, 1fr); } }
+.ap-stack { display: flex; flex-direction: column; gap: 24px; }
+.ap-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.ap-timeline li { display: flex; justify-content: space-between; gap: 16px; font-size: 15px; }
+.ap-timeline span:first-child { color: var(--text-secondary); }
+.ap-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font-size: 15px; }
+.ap-stars { display: flex; gap: 4px; }
+.ap-stars button { background: none; border: none; padding: 4px; font-size: 24px; line-height: 1; color: var(--text-muted); cursor: pointer; border-radius: 4px; transition: transform 150ms ease; }
+.ap-stars button.on { color: var(--text-primary); }
+.ap-stars button:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+.ap-stars button:disabled { cursor: not-allowed; opacity: 0.5; }
+@media (hover: hover) { .ap-stars button:hover:not(:disabled) { transform: scale(1.1); } }
+.ap-saved-note { font-size: 13px; color: var(--text-secondary); margin: 0; }
+.ap-project + .ap-project { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); }
+.ap-project h4 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.ap-project p { margin: 0; font-size: 15px; }
+.ap-links { display: flex; flex-wrap: wrap; gap: 12px; font-size: 15px; }
+.ap-links a { overflow-wrap: anywhere; }
