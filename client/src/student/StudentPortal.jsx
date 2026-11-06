@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { studentApi } from './studentApi.js';
 import { errorMessage, LoadingState, StudentIcon } from './StudentUI.jsx';
 import {
-  ApplicationDetailsPage, ExploreChallengesPage, ChallengeDetailsPage, SkillVerificationPage,
+  ApplicationDetailsPage, ExploreChallengesPage, SkillVerificationPage,
   AssessmentPage, MyApplicationsPage, StudentOverviewPage, StudentProfilePage, StudentSettingsPage,
 } from './StudentPages.jsx';
+import StudentChallengeDetail from './StudentChallengeDetail.jsx';
 import './student.css';
 
 const menu = [
@@ -114,7 +115,7 @@ export default function StudentPortal({ path, go }) {
             {path === '/student' || path === '/student/dashboard' ? <StudentOverviewPage profile={profile} session={session} go={go} />
               : path === '/student/profile' ? <StudentProfilePage profile={profile} profileLoading={profileLoading} onSaved={updateProfile} onRefresh={refreshProfile} notify={notify} />
                 : path === '/student/challenges' ? <ExploreChallengesPage go={go} />
-                  : path.startsWith('/student/challenges/') ? <ChallengeDetailsPage challengeId={path.split('/')[3]} go={go} notify={notify} />
+                  : path.startsWith('/student/challenges/') ? <StudentChallengeDetail challengeId={path.split('/')[3]} go={go} notify={notify} profile={profile} profileLoading={profileLoading} />
                     : path === '/student/applications' ? <MyApplicationsPage go={go} />
                       : path.startsWith('/student/applications/') ? <ApplicationDetailsPage applicationId={path.split('/')[3]} go={go} notify={notify} />
                         : path === '/student/skills' ? <SkillVerificationPage go={go} />
