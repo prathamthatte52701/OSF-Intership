@@ -25,7 +25,7 @@ async function company(id) {
   const ts = new Date().toISOString(); const acc = newId(); const token = newSecret();
   await db.collection('companies').insertOne({ _id: id, company_name: id, address1: '1 Rd', country: 'India', country_code: 'IN', city: 'Pune', contact_name: 'Owner', email: `${id}@x.example`, status: 'VERIFIED', created_at: ts, verified_at: ts });
   await db.collection('users').insertOne({ _id: acc, company_id: id, user_id: `OSF-${id}`, password_hash: 'h', created_at: ts, email_verified: 1, must_change_password: 0, password_setup_status: 'COMPLETED' });
-  const expires = Date.now() + 60000;
+  const expires = Date.now() + 10 * 60 * 1000; // generous margin: tests make many real round-trips to Mongo
   await db.collection('sessions').insertOne({ token_hash: sha256(token), user_id: acc, expires_at: expires, expires_at_date: new Date(expires), created_at: ts });
   return `osf_session=${encodeURIComponent(token)}`;
 }

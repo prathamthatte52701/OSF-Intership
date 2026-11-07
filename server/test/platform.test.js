@@ -36,7 +36,7 @@ async function companySession(companyId, email) {
   const accountId = newId(); const token = newSecret();
   await db.collection('companies').insertOne({ _id: companyId, company_name: 'Test Company', address1: '1 Test Road', country: 'India', country_code: 'IN', city: 'Pune', contact_name: 'Company Owner', email, status: 'VERIFIED', created_at: timestamp, verified_at: timestamp });
   await db.collection('users').insertOne({ _id: accountId, company_id: companyId, user_id: `OSF-${companyId}`, password_hash: 'test-only-hash', created_at: timestamp, email_verified: 1, must_change_password: 0, password_setup_status: 'COMPLETED' });
-  const expires = Date.now() + 60000;
+  const expires = Date.now() + 10 * 60 * 1000; // generous margin: this test makes many real round-trips to Mongo
   await db.collection('sessions').insertOne({ token_hash: sha256(token), user_id: accountId, expires_at: expires, expires_at_date: new Date(expires), created_at: timestamp });
   return { cookie: `osf_session=${encodeURIComponent(token)}`, accountId };
 }
@@ -87,7 +87,7 @@ test('schema indexes and student/company flows preserve ownership and answer-key
   await db.collection('student_users').insertOne({ _id: secondAccountId, email: 'another-student@example.com', password_hash: 'test-hash', email_verified: 1, account_status: 'ACTIVE', password_created_at: secondCreated, updated_at: secondCreated, created_at: secondCreated });
   await db.collection('students').insertOne({ _id: secondStudentId, account_id: secondAccountId, full_name: 'Another Student', created_at: secondCreated, updated_at: secondCreated });
   const secondStudentToken = newSecret();
-  const secondExpires = Date.now() + 60000;
+  const secondExpires = Date.now() + 10 * 60 * 1000; // generous margin: this test makes many real round-trips to Mongo
   await db.collection('student_sessions').insertOne({ token_hash: sha256(secondStudentToken), student_user_id: secondAccountId, expires_at: secondExpires, expires_at_date: new Date(secondExpires), created_at: secondCreated });
   const secondStudentCookie = `osf_student_session=${encodeURIComponent(secondStudentToken)}`;
   assert.equal((await request(`/api/students/${secondStudentId}`, { cookie: studentCookie })).status, 403);

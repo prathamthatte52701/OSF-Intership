@@ -37,7 +37,7 @@ async function companySession(companyId, email) {
   const accountId = newId(); const token = newSecret();
   await db.collection('companies').insertOne({ _id: companyId, company_name: 'Test Company', address1: '1 Test Road', country: 'India', country_code: 'IN', city: 'Pune', contact_name: 'Company Owner', email, status: 'VERIFIED', created_at: timestamp, verified_at: timestamp });
   await db.collection('users').insertOne({ _id: accountId, company_id: companyId, user_id: `OSF-${companyId}`, password_hash: 'test-only-hash', created_at: timestamp, email_verified: 1, must_change_password: 0, password_setup_status: 'COMPLETED' });
-  const expires = Date.now() + 60000;
+  const expires = Date.now() + 10 * 60 * 1000; // generous margin: tests make many real round-trips to Mongo
   await db.collection('sessions').insertOne({ token_hash: sha256(token), user_id: accountId, expires_at: expires, expires_at_date: new Date(expires), created_at: timestamp });
   return { cookie: `osf_session=${encodeURIComponent(token)}`, accountId };
 }
@@ -47,7 +47,7 @@ async function studentSession(email) {
   const accountId = newId(); const studentId = newId(); const ts = new Date().toISOString(); const token = newSecret();
   await db.collection('student_users').insertOne({ _id: accountId, email, password_hash: 'test-hash', email_verified: 1, account_status: 'ACTIVE', password_created_at: ts, updated_at: ts, created_at: ts });
   await db.collection('students').insertOne({ _id: studentId, account_id: accountId, full_name: 'Audit Student', created_at: ts, updated_at: ts });
-  const expires = Date.now() + 60000;
+  const expires = Date.now() + 10 * 60 * 1000; // generous margin: tests make many real round-trips to Mongo
   await db.collection('student_sessions').insertOne({ token_hash: sha256(token), student_user_id: accountId, expires_at: expires, expires_at_date: new Date(expires), created_at: ts });
   return { cookie: `osf_student_session=${encodeURIComponent(token)}`, studentId };
 }
