@@ -1,29 +1,39 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { skip, useThrowawayDb } from '../testSupport/mongo.js';
 
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), 'osf-seed-')), 'seed.sqlite');
-const { db } = await import('../db.js');
-const { seed, generatePassword } = await import('../scripts/seed-demo.js');
-const sec = await import('../security.js');
-
-test('seed is idempotent, populates expected rows, passwords verify', async () => {
-  const password = generatePassword();
-  assert.ok(sec.validatePassword(password));
-  let creds;
-  for (let i = 0; i < 2; i++) creds = await seed(db, { password, ...sec });
-  const n = t => db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c;
-  assert.deepEqual([n('companies'), n('users'), n('students'), n('challenges'), n('applications'), n('saved_students'), n('skill_assessments'), n('skill_assessment_attempts')], [5, 5, 5, 12, 8, 2, 1, 1]);
-  assert.equal(n('schema_migrations'), 4);
-  const now = new Date().toISOString();
-  assert.equal(db.prepare("SELECT COUNT(*) c FROM challenges WHERE status='PUBLISHED' AND application_opens_at<=? AND application_closes_at>=?").get(now, now).c, 5);
-  assert.equal(db.prepare('SELECT COUNT(DISTINCT status) c FROM applications').get().c, 4);
-  assert.deepEqual(db.pragma('foreign_key_check'), []);
-  assert.equal(db.pragma('foreign_keys', { simple: true }), 1);
-  const hashes = [...db.prepare('SELECT password_hash h FROM users').all(), ...db.prepare('SELECT password_hash h FROM student_users').all()];
-  assert.equal(hashes.length, creds.length);
-  for (const { h } of hashes) assert.ok(await sec.verifyPassword(h, password));
-  assert.match(db.prepare('SELECT user_id FROM users').get().user_id, /^OSF-\d{6}$/);
+test('seed is idempotent, populates expected documents, passwords verify', { skip }, async () => {
+  const mongo = await useThrowawayDb();
+  let repos;
+  try {
+    const { createRepositories } = await import('../repositories/index.js');
+    const { seed, generatePassword } = await import('../scripts/seed-demo.js');
+    const sec = await import('../security.js');
+    repos = await createRepositories();
+    const { db } = mongo;
+    const password = generatePassword();
+    assert.ok(sec.validatePassword(password));
+    let creds;
+    for (let i = 0; i < 2; i++) creds = await seed(repos, { password, ...sec });
+    const n = c => db.collection(c).countDocuments();
+    assert.deepEqual(await Promise.all(['companies', 'users', 'students', 'challenges', 'applications', 'saved_students', 'skill_assessments', 'skill_assessment_questions', 'skill_assessment_attempts'].map(n)), [5, 5, 5, 12, 8, 2, 1, 5, 1]);
+    const now = new Date().toISOString();
+    assert.equal(await db.collection('challenges').countDocuments({ status: 'PUBLISHED', application_opens_at: { $lte: now }, application_closes_at: { $gte: now } }), 5);
+    assert.equal((await db.collection('applications').distinct('status')).length, 4);
+    // no dangling references
+    const ids = async c => new Set((await db.collection(c).find({}, { projection: { _id: 1 } }).toArray()).map(d => d._id));
+    const [studentIds, challengeIds, companyIds] = await Promise.all([ids('students'), ids('challenges'), ids('companies')]);
+    for (const a of await db.collection('applications').find().toArray()) assert.ok(challengeIds.has(a.challenge_id) && studentIds.has(a.student_id));
+    for (const c of await db.collection('challenges').find().toArray()) assert.ok(companyIds.has(c.company_id));
+    const attempt = await db.collection('skill_assessment_attempts').findOne();
+    assert.equal(attempt.answers.length, 5);
+    const hashes = [...await db.collection('users').find().toArray(), ...await db.collection('student_users').find().toArray()].map(u => u.password_hash);
+    assert.equal(hashes.length, creds.length);
+    for (const h of hashes) assert.ok(await sec.verifyPassword(h, password));
+    assert.match((await db.collection('users').findOne()).user_id, /^OSF-\d{6}$/);
+    assert.deepEqual((await db.collection('challenges').findOne({ role_title: 'Full Stack Developer Intern' })).required_skills, ['Git', 'Node.js', 'React', 'REST APIs', 'SQLite']);
+  } finally {
+    await repos?.conn.close();
+    await mongo.drop();
+  }
 });
