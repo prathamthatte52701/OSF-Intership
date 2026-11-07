@@ -13,7 +13,7 @@ export async function detectTransactionSupport(client) {
 }
 
 export async function connectMongo({ uri = process.env.MONGODB_URI, dbName = process.env.MONGODB_DB } = {}) {
-  if (!uri) throw new Error('DB_DRIVER=mongo requires MONGODB_URI (URL-encode special characters in the password).');
+  if (!uri) throw new Error('MONGODB_URI is required (URL-encode special characters in the password).');
   const client = new MongoClient(uri, { serverSelectionTimeoutMS: 8000 });
   await client.connect();
   const db = client.db(dbName || undefined); // falls back to the database named in the URI, else "test"

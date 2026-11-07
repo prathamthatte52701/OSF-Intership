@@ -1,23 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createServer } from 'node:http';
+import { skip, useThrowawayDb } from '../testSupport/mongo.js';
 
-const testDirectory = mkdtempSync(join(tmpdir(), 'osf-student-account-'));
 process.env.NODE_ENV = 'test';
-process.env.DATABASE_PATH = join(testDirectory, 'portal.sqlite');
 process.env.OTP_HMAC_SECRET = 'test-only-otp-pepper-32-characters-long';
 process.env.APP_ORIGIN = 'http://localhost:3000';
 
-const [{ app }, { db }, mail] = await Promise.all([import('../index.js'), import('../db.js'), import('../mail.js')]);
-app.set('trust proxy', 'loopback');
+const mongo = await useThrowawayDb();
+const { app, closeDatabase } = mongo ? await import('../index.js') : {};
+const mail = await import('../mail.js');
+const db = mongo?.db;
 const sent = [];
 mail.setMailSenderForTests(async message => { sent.push(message); return { messageId: 'test-only' }; });
-const server = createServer(app);
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const origin = `http://127.0.0.1:${server.address().port}`;
+const server = app && createServer(app);
+if (app) {
+  app.set('trust proxy', 'loopback');
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+}
+const origin = server && `http://127.0.0.1:${server.address().port}`;
 let ipNumber = 10;
 const api = async (path, { method = 'POST', body, cookie, ip = `198.51.100.${ipNumber++}` } = {}) => {
   const response = await fetch(`${origin}/api${path}`, {
@@ -29,7 +30,9 @@ const api = async (path, { method = 'POST', body, cookie, ip = `198.51.100.${ipN
 const PASSWORD = 'StrongPass!2026';
 const NEW_PASSWORD = 'BrandNewPass!2027';
 const otpFrom = message => message.text.match(/is (\d{6})/)[1];
-const sessionCount = email => db.prepare('SELECT COUNT(*) AS n FROM student_sessions WHERE student_user_id=(SELECT id FROM student_users WHERE email=?)').get(email).n;
+const studentUserId = async email => (await db.collection('student_users').findOne({ email }))._id;
+const sessionCount = async email => db.collection('student_sessions').countDocuments({ student_user_id: await studentUserId(email) });
+const setOtp = async (email, fields) => db.collection('student_otp_challenges').updateOne({ student_user_id: await studentUserId(email) }, { $set: fields });
 
 async function makeStudent(email) {
   const before = sent.length;
@@ -48,30 +51,31 @@ async function requestReset(email, ip) {
 }
 
 test.after(async () => {
+  if (!app) return;
   await new Promise(resolve => server.close(resolve));
-  db.close();
-  rmSync(testDirectory, { recursive: true, force: true });
+  await closeDatabase();
+  await mongo.drop();
 });
 
-test('change-password verifies current password and keeps only the current session', async () => {
+test('change-password verifies current password and keeps only the current session', { skip }, async () => {
   const email = 'change@example.com';
   await makeStudent(email);
   const current = await login(email); const other = await login(email);
-  assert.equal(sessionCount(email), 2);
+  assert.equal(await sessionCount(email), 2);
   assert.equal((await api('/student/auth/change-password', { body: { currentPassword: NEW_PASSWORD, newPassword: NEW_PASSWORD } })).status, 401);
   assert.equal((await api('/student/auth/change-password', { cookie: current, body: { currentPassword: 'WrongPass!2026x', newPassword: NEW_PASSWORD } })).status, 400);
   assert.equal((await api('/student/auth/change-password', { cookie: current, body: { currentPassword: PASSWORD, newPassword: 'weak' } })).status, 400);
-  assert.equal(sessionCount(email), 2);
+  assert.equal(await sessionCount(email), 2);
   const ok = await api('/student/auth/change-password', { cookie: current, body: { currentPassword: PASSWORD, newPassword: NEW_PASSWORD } });
   assert.equal(ok.status, 200);
-  assert.equal(sessionCount(email), 1);
+  assert.equal(await sessionCount(email), 1);
   assert.equal((await api('/student/auth/session', { method: 'GET', cookie: current })).status, 200);
   assert.equal((await api('/student/auth/session', { method: 'GET', cookie: other })).status, 401);
   assert.equal((await api('/student/auth/login', { body: { email, password: PASSWORD } })).status, 401);
   await login(email, NEW_PASSWORD);
 });
 
-test('logout-all deletes every session and clears the cookie, only for the caller', async () => {
+test('logout-all deletes every session and clears the cookie, only for the caller', { skip }, async () => {
   await makeStudent('all@example.com'); await makeStudent('bystander@example.com');
   const a = await login('all@example.com'); await login('all@example.com');
   await login('bystander@example.com');
@@ -79,11 +83,11 @@ test('logout-all deletes every session and clears the cookie, only for the calle
   const result = await api('/student/auth/logout-all', { cookie: a });
   assert.equal(result.status, 200);
   assert.match(result.headers.get('set-cookie'), /Max-Age=0/);
-  assert.equal(sessionCount('all@example.com'), 0);
-  assert.equal(sessionCount('bystander@example.com'), 1);
+  assert.equal(await sessionCount('all@example.com'), 0);
+  assert.equal(await sessionCount('bystander@example.com'), 1);
 });
 
-test('forgot-password is generic, sends only for eligible accounts, and enforces cooldown and IP limit', async () => {
+test('forgot-password is generic, sends only for eligible accounts, and enforces cooldown and IP limit', { skip }, async () => {
   await makeStudent('forgot@example.com');
   const unverified = 'unverified@example.com';
   await api('/student/auth/register', { body: { email: unverified, password: PASSWORD } });
@@ -97,23 +101,23 @@ test('forgot-password is generic, sends only for eligible accounts, and enforces
   // 60-second cooldown per account, even from another IP.
   const again = await requestReset('forgot@example.com');
   assert.equal(again.result.status, 200); assert.equal(again.message, null);
-  db.prepare('UPDATE student_otp_challenges SET last_sent_at=? WHERE student_user_id=(SELECT id FROM student_users WHERE email=?)').run(Date.now() - 61_000, 'forgot@example.com');
+  await setOtp('forgot@example.com', { last_sent_at: Date.now() - 61_000 });
   assert.ok((await requestReset('forgot@example.com')).message);
   // Unverified and suspended accounts get the same response but no code.
   const before = sent.length;
   assert.deepEqual((await api('/student/auth/forgot-password', { body: { email: unverified } })).body, missing.result.body);
-  db.prepare("UPDATE student_users SET account_status='SUSPENDED' WHERE email=?").run('forgot@example.com');
-  db.prepare('UPDATE student_otp_challenges SET last_sent_at=0 WHERE student_user_id=(SELECT id FROM student_users WHERE email=?)').run('forgot@example.com');
+  await db.collection('student_users').updateOne({ email: 'forgot@example.com' }, { $set: { account_status: 'SUSPENDED' } });
+  await setOtp('forgot@example.com', { last_sent_at: 0 });
   await api('/student/auth/forgot-password', { body: { email: 'forgot@example.com' } });
   assert.equal(sent.length, before);
-  db.prepare("UPDATE student_users SET account_status='ACTIVE' WHERE email=?").run('forgot@example.com');
+  await db.collection('student_users').updateOne({ email: 'forgot@example.com' }, { $set: { account_status: 'ACTIVE' } });
   // 5 requests per hour per IP.
   const ip = '203.0.113.99';
   for (let i = 0; i < 5; i += 1) assert.equal((await api('/student/auth/forgot-password', { body: { email: 'nobody@example.com' }, ip })).status, 200);
   assert.equal((await api('/student/auth/forgot-password', { body: { email: 'nobody@example.com' }, ip })).status, 429);
 });
 
-test('reset-password succeeds with the code, kills all sessions, and rejects reuse', async () => {
+test('reset-password succeeds with the code, kills all sessions, and rejects reuse', { skip }, async () => {
   const email = 'reset@example.com';
   await makeStudent(email); await login(email); await login(email);
   const { message } = await requestReset(email);
@@ -123,13 +127,13 @@ test('reset-password succeeds with the code, kills all sessions, and rejects reu
   assert.equal((await api('/student/auth/reset-password', { body: { email, otp, newPassword: 'weak' } })).status, 400);
   const ok = await api('/student/auth/reset-password', { body: { email, otp, newPassword: NEW_PASSWORD } });
   assert.equal(ok.status, 200);
-  assert.equal(sessionCount(email), 0);
+  assert.equal(await sessionCount(email), 0);
   assert.equal((await api('/student/auth/login', { body: { email, password: PASSWORD } })).status, 401);
   await login(email, NEW_PASSWORD);
   assert.equal((await api('/student/auth/reset-password', { body: { email, otp, newPassword: PASSWORD } })).status, 400);
 });
 
-test('reset-password rejects expired codes and locks after five wrong attempts', async () => {
+test('reset-password rejects expired codes and locks after five wrong attempts', { skip }, async () => {
   const email = 'lock@example.com';
   await makeStudent(email);
   const otp = otpFrom((await requestReset(email)).message);
@@ -141,12 +145,12 @@ test('reset-password rejects expired codes and locks after five wrong attempts',
   const expiring = 'expired@example.com';
   await makeStudent(expiring);
   const code = otpFrom((await requestReset(expiring)).message);
-  db.prepare('UPDATE student_otp_challenges SET expires_at=? WHERE student_user_id=(SELECT id FROM student_users WHERE email=?)').run(Date.now() - 1000, expiring);
+  await setOtp(expiring, { expires_at: Date.now() - 1000 });
   assert.equal((await api('/student/auth/reset-password', { body: { email: expiring, otp: code, newPassword: NEW_PASSWORD } })).status, 410);
   assert.equal((await api('/student/auth/reset-password', { body: { email: 'nobody@example.com', otp: code, newPassword: NEW_PASSWORD } })).status, 400);
 });
 
-test('profileVisible defaults on and round-trips through GET and PUT /student/profile', async () => {
+test('profileVisible defaults on and round-trips through GET and PUT /student/profile', { skip }, async () => {
   await makeStudent('visible@example.com');
   const cookie = await login('visible@example.com');
   const created = await api('/student/profile', { method: 'PUT', cookie, body: { fullName: 'Vi Sible', skills: ['React'] } });

@@ -1,12 +1,11 @@
-// MongoDB implementation of the STUDENT repository (DB_DRIVER=mongo). Same interface as sqlite/student.js.
-// UNVERIFIED against a live cluster (none available when written) - reviewed by reasoning only.
+// MongoDB implementation of the STUDENT repository.
 // Documents keep the SQL column names; `_id` holds the SQL `id` string. Collections: student_users, student_otp_challenges,
 // student_sessions, students, student_skills, student_projects.
 //
 // SHARED HELPER for other route groups (applications, talent, saved-students):
 //   buildStudentProfile({ db }, studentId, { privateFields = false, includeResume = false } = {}) -> Promise<profile | undefined>
 // (first arg is the connection object from connectMongo(), i.e. anything with `.db`), and bound on the repo as
-// `student.buildStudentProfile(studentId, opts)` - identical to sqlite/student.js. Prefer the repo method. Same profile shape.
+// `student.buildStudentProfile(studentId, opts)`. Prefer the repo method.
 import { NOCASE } from './ensureIndexes.js';
 
 const DUPLICATE = 11000;

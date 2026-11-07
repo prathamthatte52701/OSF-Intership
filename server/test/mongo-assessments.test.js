@@ -3,11 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 
-test('assessments repositories expose the same interface in both drivers', async () => {
-  const [{ createAssessmentsRepo: sqliteRepo }, { createAssessmentsRepo: mongoRepo }] =
-    await Promise.all([import('../repositories/sqlite/assessments.js'), import('../repositories/mongo/assessments.js')]);
-  const names = repo => Object.keys(repo).sort();
-  assert.deepEqual(names(mongoRepo({ db: { collection: () => ({}) } })), names(sqliteRepo(null)));
+test('assessments repository exposes its async interface', async () => {
+  const { createAssessmentsRepo } = await import('../repositories/mongo/assessments.js');
+  const repo = createAssessmentsRepo({ db: { collection: () => ({}) } });
+  for (const name of ['createAssessment', 'startAttempt', 'expireAttempts']) assert.equal(typeof repo[name], 'function', name);
+  assert.ok(Object.values(repo).every(fn => typeof fn === 'function'));
 });
 
 // Live tests run only when MONGODB_URI is set; they use a throwaway database osf_test_<random> that is dropped afterwards.

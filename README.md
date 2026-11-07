@@ -35,7 +35,7 @@ A company registration and account portal for **Our Startup Freelancer (OSF)**. 
 - Student profiles store searchable skills and linked projects; professional links, resume references, education, and location remain optional.
 - Companies can publish live challenges, review applicants and submissions, record manual ratings/feedback/shortlists, and create manually reviewed MCQ assessments.
 - Talent discovery filters stored student skills and college information and reports the matching skills directly. Companies can save student profiles.
-- Task files are stored under the ignored local `server/uploads/` directory; SQLite stores metadata and an opaque file reference.
+- Task files are stored under the ignored local `server/uploads/` directory; MongoDB stores metadata and an opaque file reference.
 
 ### Contact page
 - The Contact Us page is present.
@@ -48,7 +48,7 @@ A company registration and account portal for **Our Startup Freelancer (OSF)**. 
 | --- | --- |
 | Frontend | React, Vite, JavaScript |
 | Backend | Node.js, Express |
-| Database | SQLite with better-sqlite3 |
+| Database | MongoDB (official `mongodb` driver) |
 | Email | Nodemailer with Gmail SMTP |
 | Password hashing | Argon2id |
 | OTP protection | HMAC-SHA-256 |
@@ -71,11 +71,10 @@ A company registration and account portal for **Our Startup Freelancer (OSF)**. 
 │   │   └── styles.css
 │   └── vite.config.js        # Vite server and /api proxy
 ├── server/
-│   ├── db.js                 # SQLite schema and migrations
 │   ├── env.js                # Root .env loading
 │   ├── index.js              # Express API and routes
 │   ├── mail.js               # Nodemailer email templates and transport
-│   ├── migrations/           # Versioned additive platform migrations
+│   ├── repositories/mongo/   # MongoDB repositories and index definitions
 │   ├── platform.js           # Student, challenge, assessment, and talent APIs
 │   ├── security.js           # OTP, token and password security helpers
 │   └── validation.js         # Server-side registration/profile validation
@@ -119,7 +118,7 @@ Configure the values:
 ```dotenv
 PORT=4000
 VITE_AUTH_MODE=api
-DATABASE_PATH=server/data/osf.sqlite
+MONGODB_URI=mongodb+srv://USER:PASSWORD@CLUSTER_HOST
 APP_ORIGIN=http://localhost:3000
 
 EMAIL_USER=your-gmail-address@gmail.com
@@ -136,7 +135,8 @@ Environment variable reference:
 | `PORT` | Express API port. Defaults to `4000`. |
 | `VITE_AUTH_MODE` | Use `api` for backend authentication. The explicit `mock` value selects the browser demo mode. |
 | `VITE_UI_PREVIEW` | Set to `true` only for an explicitly enabled preview build to show the Desktop/Mobile preview switcher; Vite development shows it automatically. |
-| `DATABASE_PATH` | SQLite database path, relative to the repository root when configured. |
+| `MONGODB_URI` | Required. MongoDB connection string (URL-encode special characters in the password). |
+| `MONGODB_DB` | Optional database name; defaults to the one in the URI. |
 | `APP_ORIGIN` | Frontend origin used to create password setup links. |
 | `EMAIL_USER` | Gmail account used as the sender. |
 | `EMAIL_APP_PASSWORD` | Gmail App Password used by Nodemailer. |
@@ -145,7 +145,7 @@ Environment variable reference:
 
 **Email configuration:** The backend can start without Gmail credentials, but real OTP and password setup emails will not be delivered. The health endpoint reports whether the email credentials are configured; this is not a delivery test.
 
-**Secret handling:** Never commit `.env`, expose Gmail credentials in frontend code, or share the Gmail App Password. The repository ignores local environment files and SQLite database files.
+**Secret handling:** Never commit `.env`, expose Gmail credentials in frontend code, or share the Gmail App Password. The repository ignores local environment files.
 
 ### 3. Start the frontend and backend
 
@@ -210,7 +210,7 @@ The frontend build output is written to the root `dist/` directory.
 ## Registration and authentication flow
 
 1. **Register:** The React application sends company details to `POST /api/registrations`.
-2. **Validate and store:** Express validates the submitted data and saves the registration in SQLite.
+2. **Validate and store:** Express validates the submitted data and saves the registration in MongoDB.
 3. **Send OTP:** The backend generates a six-digit OTP and uses Nodemailer with Gmail SMTP to send the verification email.
 4. **Verify email:** The user submits the OTP to `POST /api/registrations/:id/verify-email`. The backend checks its hash, expiry, and attempt limit.
 5. **Set password:** After verification, the backend creates a one-time setup token and sends a password setup link by email.
@@ -288,7 +288,7 @@ Protected endpoints require a valid session cookie. The backend derives company 
 - Password setup tokens are stored as hashes, expire after 30 minutes, and are single-use.
 - Passwords are hashed using Argon2id.
 - API requests are rate-limited, and Helmet supplies common HTTP security headers.
-- Session identifiers are stored as hashes in SQLite. The browser cookie is HTTP-only and uses SameSite=Lax; the Secure attribute is enabled in production.
+- Session identifiers are stored as hashes in MongoDB. The browser cookie is HTTP-only and uses SameSite=Lax; the Secure attribute is enabled in production.
 - Student session identifiers use a separate table and cookie; student emails are verified with HMAC-protected OTPs before login.
 - Challenge applicant task deadlines are snapshotted at apply time and are independent from the public application window.
 - Submission uploads are limited to 10 MB and accepted only for matching PDF, TXT, ZIP, PNG, or JPG extension/MIME/content signatures. Files are saved under `server/uploads/`; the directory is not served publicly.
@@ -298,16 +298,14 @@ Protected endpoints require a valid session cookie. The backend derives company 
 
 ## Database and local data
 
-SQLite is created automatically at the configured database path. By default, the database is stored at `server/data/osf.sqlite`. The database directory and SQLite files are excluded from Git.
-
-The server applies additive, versioned schema migrations for company authentication and the student/platform modules. Migration 3 allows a submission row to hold uploaded draft files before final submission. Do not delete the SQLite database to apply code changes if it contains registrations or user accounts. Back up the database before making manual schema or data changes.
+The application uses MongoDB (for example MongoDB Atlas) via `MONGODB_URI`. Collections are created on first write and indexes are (re)created idempotently at server startup from `server/repositories/mongo/ensureIndexes.js`; there are no migrations to run. Back up the database (Atlas backups or `mongodump`) before manual changes. Tests that need a database (`npm test` in `server/`) run against a throwaway `osf_test_<random>` database and are skipped when `MONGODB_URI` is not set.
 
 ## Current limitations and production checklist
 
 - Real email delivery depends on valid Gmail SMTP credentials and must be tested with an approved recipient address.
 - A configured email sender does not guarantee inbox delivery; messages may be delayed, rejected, or filtered as spam.
 - Contact Us currently displays unconfigured placeholders and does not send messages. Add verified OSF support information before launch.
-- The application currently uses local SQLite storage. Select and configure a production database and backup/restore process before deployment.
+- Configure a production MongoDB cluster (network access, credentials, backups) before deployment.
 - Configure the production frontend origin, HTTPS, secure environment variables, database persistence, and deployment-specific session settings.
 - Run end-to-end tests for registration, OTP delivery and verification, password setup, login, profile updates, password changes, and logout in the target environment.
 - Review the third-party package licences and deployment requirements before redistributing or hosting the application.

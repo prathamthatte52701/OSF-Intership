@@ -1,24 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createServer } from 'node:http';
 import { validateRegistration, validateCompanyProfile } from '../validation.js';
+import { skip, useThrowawayDb } from '../testSupport/mongo.js';
 
-const testDirectory = mkdtempSync(join(tmpdir(), 'osf-india-'));
 process.env.NODE_ENV = 'test';
-process.env.DATABASE_PATH = join(testDirectory, 'portal.sqlite');
 process.env.OTP_HMAC_SECRET = 'test-only-otp-pepper-32-characters-long';
 process.env.APP_ORIGIN = 'http://localhost:3000';
 
-const [{ app }, { db }, { sha256 }, mail] = await Promise.all([
-  import('../index.js'), import('../db.js'), import('../security.js'), import('../mail.js'),
-]);
+const mongo = await useThrowawayDb();
+const { app, closeDatabase } = mongo ? await import('../index.js') : {};
+const [{ sha256 }, mail] = await Promise.all([import('../security.js'), import('../mail.js')]);
 mail.setMailSenderForTests(async () => ({ messageId: 'india-test-only' }));
-const server = createServer(app);
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const origin = `http://127.0.0.1:${server.address().port}`;
+const server = app && createServer(app);
+if (app) await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const origin = server && `http://127.0.0.1:${server.address().port}`;
 const baseRegistration = {
   companyName: 'Northstar Labs', address1: '10 Main Street', state: 'Maharashtra', city: 'Pune',
   postal: '000123', contactName: 'Aanya Sharma', email: 'india@company.example', phone: '',
@@ -63,12 +59,19 @@ test('registration rejects foreign country, invalid state/city, PIN, and non-Ind
   assert.equal(validateRegistration({ ...baseRegistration, phone: '9876543210' }).phone, '+919876543210');
 });
 
-test('registration API enforces India and email uniqueness; profile API is authenticated and logout revokes session', async t => {
+test('registration API enforces India and email uniqueness; profile API is authenticated and logout revokes session', { skip }, async t => {
   t.after(async () => {
     await new Promise(resolve => server.close(resolve));
-    db.close();
-    rmSync(testDirectory, { recursive: true, force: true });
+    await closeDatabase();
+    await mongo.drop();
   });
+  const { db } = mongo;
+  const addSession = (tokenHash, userRowId) => {
+    const expires = Date.now() + 60_000;
+    return db.collection('sessions').insertOne({ token_hash: tokenHash, user_id: userRowId, expires_at: expires, expires_at_date: new Date(expires), created_at: new Date().toISOString() });
+  };
+  const addUser = (_id, company_id, user_id) => db.collection('users').insertOne({ _id, company_id, user_id, password_hash: 'test-hash', created_at: new Date().toISOString(), email_verified: 1, must_change_password: 0, password_setup_status: 'COMPLETED' });
+  const company = id => db.collection('companies').findOne({ _id: id });
 
   const health = await fetch(`${origin}/api/health`);
   assert.equal(health.status, 200);
@@ -77,24 +80,21 @@ test('registration API enforces India and email uniqueness; profile API is authe
   assert.equal(foreign.status, 400);
   const created = await post('/api/registrations', { ...baseRegistration, country: 'India', countryCode: 'IN', pan: '' });
   assert.equal(created.status, 201);
-  const stored = db.prepare('SELECT pan,country,country_code,postal,phone_e164 FROM companies WHERE id=?').get(created.body.registrationId);
+  const stored = await db.collection('companies').findOne({ _id: created.body.registrationId }, { projection: { _id: 0, pan: 1, country: 1, country_code: 1, postal: 1, phone_e164: 1 } });
   assert.deepEqual(stored, { pan: null, country: 'India', country_code: 'IN', postal: '000123', phone_e164: null });
   assert.equal((await post('/api/registrations', { ...baseRegistration, email: 'INDIA@COMPANY.EXAMPLE' })).status, 409);
 
   const companyId = created.body.registrationId;
-  const userId = 'india-profile-user';
-  db.prepare(`INSERT INTO users (id,company_id,user_id,password_hash,created_at,email_verified,must_change_password,password_setup_status)
-    VALUES ('profile-user',?,?, 'test-hash',?,1,0,'COMPLETED')`).run(companyId, userId, new Date().toISOString());
+  await addUser('profile-user', companyId, 'india-profile-user');
   const token = 'test-session-token-for-india-profile';
-  db.prepare('INSERT INTO sessions (token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)')
-    .run(sha256(token), 'profile-user', Date.now() + 60_000, new Date().toISOString());
+  await addSession(sha256(token), 'profile-user');
   const cookie = `osf_session=${encodeURIComponent(token)}`;
 
   assert.equal((await fetch(`${origin}/api/company/profile`)).status, 401);
   const profileResponse = await fetch(`${origin}/api/company/profile`, { headers: { cookie } });
   assert.equal(profileResponse.status, 200);
   const profile = (await profileResponse.json()).company;
-  const registeredAt = db.prepare('SELECT created_at FROM companies WHERE id=?').get(companyId).created_at;
+  const registeredAt = (await company(companyId)).created_at;
   assert.equal(profile.registeredAt, registeredAt);
   assert.equal(profile.emailVerified, 1);
   const payload = {
@@ -110,22 +110,19 @@ test('registration API enforces India and email uniqueness; profile API is authe
   assert.equal(saved.body.company.pan, null);
   assert.equal(saved.body.company.postal, '001234');
   assert.equal(saved.body.company.phone, '+919876543210');
-  assert.equal(db.prepare('SELECT city FROM companies WHERE id=?').get(companyId).city, 'Pune');
+  assert.equal((await company(companyId)).city, 'Pune');
   assert.equal((await post('/api/company/profile', { ...payload, city: 'Unknown City' }, cookie)).status, 400);
-  assert.equal(db.prepare('SELECT city FROM companies WHERE id=?').get(companyId).city, 'Pune');
+  assert.equal((await company(companyId)).city, 'Pune');
   assert.throws(() => validateCompanyProfile({ ...payload, country: 'Singapore' }, 'india@company.example'), /Only companies based in India/);
   assert.equal((await post('/api/company/profile', payload)).status, 401);
 
-  db.prepare(`INSERT INTO companies (id,company_name,address1,country,country_code,city,contact_name,email,status,created_at)
-    VALUES ('legacy-company','Legacy Example','1 Old Road','Canada','CA','Toronto','Legacy User','legacy@company.example','VERIFIED',?)`).run(new Date().toISOString());
-  db.prepare(`INSERT INTO users (id,company_id,user_id,password_hash,created_at,email_verified,must_change_password,password_setup_status)
-    VALUES ('legacy-user','legacy-company','legacy-profile-user','test-hash',?,1,0,'COMPLETED')`).run(new Date().toISOString());
+  await db.collection('companies').insertOne({ _id: 'legacy-company', company_name: 'Legacy Example', address1: '1 Old Road', country: 'Canada', country_code: 'CA', city: 'Toronto', contact_name: 'Legacy User', email: 'legacy@company.example', status: 'VERIFIED', created_at: new Date().toISOString() });
+  await addUser('legacy-user', 'legacy-company', 'legacy-profile-user');
   const legacyToken = 'test-session-token-for-legacy-profile';
-  db.prepare('INSERT INTO sessions (token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)')
-    .run(sha256(legacyToken), 'legacy-user', Date.now() + 60_000, new Date().toISOString());
+  await addSession(sha256(legacyToken), 'legacy-user');
   assert.equal((await post('/api/company/profile', payload, `osf_session=${legacyToken}`)).status, 409);
-  assert.deepEqual(db.prepare('SELECT country,country_code,city FROM companies WHERE id=?').get('legacy-company'),
-    { country: 'Canada', country_code: 'CA', city: 'Toronto' });
+  const legacy = await company('legacy-company');
+  assert.deepEqual({ country: legacy.country, country_code: legacy.country_code, city: legacy.city }, { country: 'Canada', country_code: 'CA', city: 'Toronto' });
 
   const logout = await post('/api/auth/logout', {}, cookie);
   assert.equal(logout.status, 200);

@@ -1,25 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { skip, useThrowawayDb } from '../testSupport/mongo.js';
 
-const testDirectory = mkdtempSync(join(tmpdir(), 'osf-platform-'));
 process.env.NODE_ENV = 'test';
-process.env.DATABASE_PATH = join(testDirectory, 'platform.sqlite');
 process.env.OTP_HMAC_SECRET = 'platform-test-only-otp-pepper-32-characters-long';
 process.env.APP_ORIGIN = 'http://localhost:3000';
 
-const [{ app }, { db }, { sha256 }, { newSecret, newId }, mail] = await Promise.all([
-  import('../index.js'), import('../db.js'), import('../security.js'), import('../security.js'), import('../mail.js'),
-]);
+const mongo = await useThrowawayDb();
+const { app, closeDatabase } = mongo ? await import('../index.js') : {};
+const [{ sha256, newSecret, newId }, mail] = await Promise.all([import('../security.js'), import('../mail.js')]);
+const db = mongo?.db;
 const sentMail = [];
 mail.setMailSenderForTests(async message => { sentMail.push(message); return { messageId: 'platform-test-only' }; });
-const server = createServer(app);
-app.set('trust proxy', 'loopback');
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const origin = `http://127.0.0.1:${server.address().port}`;
+const server = app && createServer(app);
+if (app) {
+  app.set('trust proxy', 'loopback');
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+}
+const origin = server && `http://127.0.0.1:${server.address().port}`;
 let sequence = 20;
 let testUploadPath;
 async function request(path, { method = 'GET', body, cookie, headers = {}, raw } = {}) {
@@ -31,29 +31,31 @@ async function request(path, { method = 'GET', body, cookie, headers = {}, raw }
   const payload = response.headers.get('content-type')?.includes('application/json') ? await response.json() : null;
   return { status: response.status, body: payload, headers: response.headers, raw: payload == null ? await response.arrayBuffer() : null };
 }
-function companySession(companyId, email) {
+async function companySession(companyId, email) {
   const timestamp = new Date().toISOString();
   const accountId = newId(); const token = newSecret();
-  db.prepare(`INSERT INTO companies(id,company_name,address1,country,country_code,city,contact_name,email,status,created_at,verified_at)
-    VALUES (?,?,?,'India','IN','Pune','Company Owner',?,'VERIFIED',?,?)`).run(companyId, 'Test Company', '1 Test Road', email, timestamp, timestamp);
-  db.prepare(`INSERT INTO users(id,company_id,user_id,password_hash,created_at,email_verified,must_change_password,password_setup_status)
-    VALUES (?,?,?, 'test-only-hash',?,1,0,'COMPLETED')`).run(accountId, companyId, `OSF-${companyId}`, timestamp);
-  db.prepare('INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)').run(sha256(token), accountId, Date.now() + 60000, timestamp);
+  await db.collection('companies').insertOne({ _id: companyId, company_name: 'Test Company', address1: '1 Test Road', country: 'India', country_code: 'IN', city: 'Pune', contact_name: 'Company Owner', email, status: 'VERIFIED', created_at: timestamp, verified_at: timestamp });
+  await db.collection('users').insertOne({ _id: accountId, company_id: companyId, user_id: `OSF-${companyId}`, password_hash: 'test-only-hash', created_at: timestamp, email_verified: 1, must_change_password: 0, password_setup_status: 'COMPLETED' });
+  const expires = Date.now() + 60000;
+  await db.collection('sessions').insertOne({ token_hash: sha256(token), user_id: accountId, expires_at: expires, expires_at_date: new Date(expires), created_at: timestamp });
   return { cookie: `osf_session=${encodeURIComponent(token)}`, accountId };
 }
 
-test('additive platform migration and student/company flows preserve ownership and answer-key privacy', async t => {
+test('schema indexes and student/company flows preserve ownership and answer-key privacy', { skip }, async t => {
   t.after(async () => {
     await new Promise(resolve => server.close(resolve));
     if (testUploadPath) rmSync(testUploadPath, { force: true });
-    db.close();
-    rmSync(testDirectory, { recursive: true, force: true });
+    await closeDatabase();
+    await mongo.drop();
   });
 
-  assert.deepEqual(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(row => row.version), [1, 2, 3, 4]);
-  assert.deepEqual(db.pragma('foreign_key_check'), []);
-  const company = companySession('company-one', 'owner@one.example');
-  const otherCompany = companySession('company-two', 'owner@two.example');
+  // ensureIndexes.js ran at startup: spot-check the uniqueness guarantees the flows below rely on.
+  const indexNames = async collection => (await db.collection(collection).indexes()).map(index => index.name);
+  assert.ok((await indexNames('companies')).includes('companies_email_uq'));
+  assert.ok((await indexNames('applications')).includes('applications_challenge_student_uq'));
+  assert.ok((await indexNames('sessions')).includes('sessions_ttl'));
+  const company = await companySession('company-one', 'owner@one.example');
+  const otherCompany = await companySession('company-two', 'owner@two.example');
 
   const registration = await request('/api/student/auth/register', { method: 'POST', body: { email: 'student@example.com', password: 'StrongPass!2026' } });
   assert.equal(registration.status, 201);
@@ -82,13 +84,11 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal(ownProfile.body.profile.resumeReference, 'https://example.com/aarav-resume.pdf');
   assert.equal('email' in ownProfile.body.profile, false);
   const secondAccountId = newId(); const secondStudentId = newId(); const secondCreated = new Date().toISOString();
-  db.prepare(`INSERT INTO student_users(id,email,password_hash,email_verified,account_status,password_created_at,updated_at,created_at)
-    VALUES (?,'another-student@example.com','test-hash',1,'ACTIVE',?,?,?)`).run(secondAccountId, secondCreated, secondCreated, secondCreated);
-  db.prepare(`INSERT INTO students(id,account_id,full_name,created_at,updated_at) VALUES (?,?,?, ?,?)`)
-    .run(secondStudentId, secondAccountId, 'Another Student', secondCreated, secondCreated);
+  await db.collection('student_users').insertOne({ _id: secondAccountId, email: 'another-student@example.com', password_hash: 'test-hash', email_verified: 1, account_status: 'ACTIVE', password_created_at: secondCreated, updated_at: secondCreated, created_at: secondCreated });
+  await db.collection('students').insertOne({ _id: secondStudentId, account_id: secondAccountId, full_name: 'Another Student', created_at: secondCreated, updated_at: secondCreated });
   const secondStudentToken = newSecret();
-  db.prepare('INSERT INTO student_sessions(token_hash,student_user_id,expires_at,created_at) VALUES (?,?,?,?)')
-    .run(sha256(secondStudentToken), secondAccountId, Date.now() + 60000, secondCreated);
+  const secondExpires = Date.now() + 60000;
+  await db.collection('student_sessions').insertOne({ token_hash: sha256(secondStudentToken), student_user_id: secondAccountId, expires_at: secondExpires, expires_at_date: new Date(secondExpires), created_at: secondCreated });
   const secondStudentCookie = `osf_student_session=${encodeURIComponent(secondStudentToken)}`;
   assert.equal((await request(`/api/students/${secondStudentId}`, { cookie: studentCookie })).status, 403);
   const project = await request('/api/student/projects', { method: 'POST', cookie: studentCookie, body: { title: 'Open Source Tool', projectUrl: 'https://example.com/project' } });
@@ -104,7 +104,7 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal(challengeResponse.status, 201);
   const challengeId = challengeResponse.body.challenge.id;
   assert.equal((await request(`/api/company/challenges/${challengeId}/publish`, { method: 'POST', cookie: company.cookie })).status, 200);
-  db.prepare('UPDATE companies SET company_name=? WHERE id=?').run('Actual Company Name', 'company-one');
+  await db.collection('companies').updateOne({ _id: 'company-one' }, { $set: { company_name: 'Actual Company Name' } });
   const publicChallenges = await request('/api/challenges');
   assert.equal(publicChallenges.body.challenges.length, 1);
   assert.equal(publicChallenges.body.challenges[0].companyName, 'Actual Company Name');
@@ -114,10 +114,10 @@ test('additive platform migration and student/company flows preserve ownership a
   const publicChallenge = await request(`/api/challenges/${challengeId}`);
   assert.equal(publicChallenge.body.challenge.companyName, 'Actual Company Name');
   assert.equal(publicChallenge.body.challenge.requiredSkills.includes('JavaScript'), true);
-  db.prepare("UPDATE challenges SET status='DRAFT' WHERE id=?").run(challengeId);
+  await db.collection('challenges').updateOne({ _id: challengeId }, { $set: { status: 'DRAFT' } });
   assert.equal((await request('/api/challenges')).body.challenges.length, 0);
   assert.equal((await request(`/api/challenges/${challengeId}`)).status, 404);
-  db.prepare("UPDATE challenges SET status='PUBLISHED' WHERE id=?").run(challengeId);
+  await db.collection('challenges').updateOne({ _id: challengeId }, { $set: { status: 'PUBLISHED' } });
   const applicationResponse = await request(`/api/student/challenges/${challengeId}/applications`, { method: 'POST', cookie: studentCookie, body: {} });
   assert.equal(applicationResponse.status, 201);
   const application = applicationResponse.body.application;
@@ -139,7 +139,7 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal((await request(`/api/company/challenges/${challengeId}/applications`, { cookie: otherCompany.cookie })).status, 404);
   assert.equal((await request(`/api/company/applications/${application.id}`, { cookie: otherCompany.cookie })).status, 404);
   assert.equal((await request(`/api/company/challenges/${challengeId}`, { method: 'PUT', cookie: company.cookie, body: { individualTaskDurationDays: 5 } })).status, 409);
-  assert.equal(db.prepare('SELECT individual_deadline FROM applications WHERE id=?').get(application.id).individual_deadline, application.individualDeadline);
+  assert.equal((await db.collection('applications').findOne({ _id: application.id })).individual_deadline, application.individualDeadline);
   assert.equal((await request(`/api/company/challenges/${challengeId}/close`, { method: 'POST', cookie: company.cookie })).status, 200);
   assert.equal((await request('/api/challenges')).body.challenges.length, 0);
   assert.equal((await request(`/api/challenges/${challengeId}`)).status, 404);
@@ -150,7 +150,7 @@ test('additive platform migration and student/company flows preserve ownership a
   });
   assert.equal(upload.status, 201);
   assert.equal(upload.body.file.name, 'notes.txt');
-  const storedFile = db.prepare('SELECT storage_key FROM submission_files WHERE id=?').get(upload.body.file.id);
+  const storedFile = await db.collection('submission_files').findOne({ _id: upload.body.file.id });
   testUploadPath = new URL(`../uploads/${storedFile.storage_key}`, import.meta.url);
   testUploadPath = (await import('node:url')).fileURLToPath(testUploadPath);
   const draftSubmission = await request(`/api/student/applications/${application.id}/submission`, { cookie: studentCookie });
@@ -243,12 +243,12 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal((await request(`/api/company/assessments/${expiringId}/publish`, { method: 'POST', cookie: company.cookie })).status, 200);
   const expiringAttempt = await request(`/api/student/assessments/${expiringId}/attempts`, { method: 'POST', cookie: studentCookie, body: {} });
   const expiringAttemptId = expiringAttempt.body.attempt.id;
-  db.prepare('UPDATE skill_assessment_attempts SET started_at=? WHERE id=?').run(new Date(Date.now() - 61000).toISOString(), expiringAttemptId);
+  await db.collection('skill_assessment_attempts').updateOne({ _id: expiringAttemptId }, { $set: { started_at: new Date(Date.now() - 61000).toISOString() } });
   const expiredAttempt = await request(`/api/student/assessment-attempts/${expiringAttemptId}`, { cookie: studentCookie });
   assert.equal(expiredAttempt.body.attempt.status, 'EXPIRED');
-  assert.equal(db.prepare('SELECT status FROM skill_assessment_attempts WHERE id=?').get(expiringAttemptId).status, 'EXPIRED');
+  assert.equal((await db.collection('skill_assessment_attempts').findOne({ _id: expiringAttemptId })).status, 'EXPIRED');
   assert.equal((await request(`/api/student/assessment-attempts/${expiringAttemptId}`, { cookie: studentCookie })).body.attempt.status, 'EXPIRED');
-  assert.equal((await request(`/api/student/assessment-attempts/${expiringAttemptId}/answers`, { method: 'PUT', cookie: studentCookie, body: { answers: [{ questionId: expiringAssessment.body.assessment.questions?.[0]?.id || db.prepare('SELECT id FROM skill_assessment_questions WHERE assessment_id=?').get(expiringId).id, selectedOption: 'A' }], finalize: false } })).status, 409);
+  assert.equal((await request(`/api/student/assessment-attempts/${expiringAttemptId}/answers`, { method: 'PUT', cookie: studentCookie, body: { answers: [{ questionId: expiringAssessment.body.assessment.questions?.[0]?.id || (await db.collection('skill_assessment_questions').findOne({ assessment_id: expiringId }))._id, selectedOption: 'A' }], finalize: false } })).status, 409);
   assert.equal((await request(`/api/student/assessment-attempts/${expiringAttemptId}/answers`, { method: 'PUT', cookie: studentCookie, body: { answers: [], finalize: true } })).status, 409);
   assert.equal((await request(`/api/student/assessments/${expiringId}/attempts`, { method: 'POST', cookie: studentCookie, body: {} })).status, 409);
 
@@ -276,9 +276,9 @@ test('additive platform migration and student/company flows preserve ownership a
   assert.equal((await request(`/api/company/challenges/${expiredChallengeId}/close`, { method: 'POST', cookie: company.cookie })).status, 200);
   assert.equal((await request(`/api/student/applications/${secondApplicationId}/submission`, { method: 'PUT', cookie: secondStudentCookie, body: { githubUrl: 'https://github.com/another/project' } })).status, 409);
   assert.equal((await request(`/api/student/applications/${secondApplicationId}/start`, { method: 'POST', cookie: secondStudentCookie, body: {} })).status, 200);
-  db.prepare("UPDATE applications SET individual_deadline=? WHERE id=?").run(new Date(Date.now() - 1000).toISOString(), secondApplicationId);
+  await db.collection('applications').updateOne({ _id: secondApplicationId }, { $set: { individual_deadline: new Date(Date.now() - 1000).toISOString() } });
   assert.equal((await request(`/api/student/applications/${secondApplicationId}/submission`, { method: 'PUT', cookie: secondStudentCookie, body: { githubUrl: 'https://github.com/another/project' } })).status, 409);
-  assert.equal(db.prepare('SELECT status FROM applications WHERE id=?').get(secondApplicationId).status, 'EXPIRED');
+  assert.equal((await db.collection('applications').findOne({ _id: secondApplicationId })).status, 'EXPIRED');
   assert.equal((await request(`/api/student/applications/${secondApplicationId}/start`, { method: 'POST', cookie: secondStudentCookie, body: {} })).status, 409);
 
   rmSync(testUploadPath, { force: true });
