@@ -101,32 +101,10 @@ function assertApplicationDeadline(application) {
   }
   return true;
 }
-function listStudentSkills(db, studentId) {
-  return db.prepare('SELECT skill FROM student_skills WHERE student_id=? ORDER BY skill COLLATE NOCASE').all(studentId).map(row => row.skill);
-}
-function listProjects(db, studentId) {
-  return db.prepare(`SELECT id,title,description,project_url AS projectUrl,created_at AS createdAt,updated_at AS updatedAt
-    FROM student_projects WHERE student_id=? ORDER BY created_at DESC`).all(studentId);
-}
-function studentProfile(db, studentId, { privateFields = false, includeResume = false } = {}) {
-  const fields = `${privateFields || includeResume ? ',s.resume_reference AS resumeReference' : ''},s.profile_image AS profileImage`;
-  const profile = db.prepare(`SELECT s.id,s.full_name AS fullName${fields},s.college,s.degree,s.graduation_year AS graduationYear,
-      s.about,s.github_url AS githubUrl,s.linkedin_url AS linkedinUrl,s.portfolio_url AS portfolioUrl,s.location,
-      s.created_at AS createdAt,s.updated_at AS updatedAt${privateFields ? ',s.profile_visible AS profileVisible' : ''}
-    FROM students s WHERE s.id=?`).get(studentId);
-  if (profile && 'profileVisible' in profile) profile.profileVisible = Boolean(profile.profileVisible);
-  if (profile) { profile.skills = listStudentSkills(db, studentId); profile.projects = listProjects(db, studentId); }
-  return profile;
-}
 async function assertApplicationOwner(applications, appId, studentId) {
   const app = await applications.getForStudent(appId, studentId);
   if (!app) throw new InputError('Application not found.', 404);
   return app;
-}
-function ownedChallenge(db, challengeId, companyId) {
-  const challenge = db.prepare('SELECT * FROM challenges WHERE id=? AND company_id=?').get(challengeId, companyId);
-  if (!challenge) throw new InputError('Challenge not found.', 404);
-  return challenge;
 }
 async function ownedApplication(applications, applicationId, companyId) {
   const row = await applications.getForCompany(applicationId, companyId);
@@ -159,23 +137,6 @@ async function publicFileMetadata(applications, applicationId, fileId) {
   return file ? { id: file.id, name: file.original_name, mimeType: file.mime_type, sizeBytes: file.size_bytes, uploadedAt: file.created_at } : null;
 }
 
-export function expireAssessmentAttempts(db, currentTime = nowMs()) {
-  const attempts = db.prepare(`SELECT a.id,a.started_at,s.duration_minutes AS durationMinutes
-    FROM skill_assessment_attempts a JOIN skill_assessments s ON s.id=a.assessment_id WHERE a.status='IN_PROGRESS' AND s.duration_minutes IS NOT NULL`).all();
-  const expire = db.prepare("UPDATE skill_assessment_attempts SET status='EXPIRED',updated_at=? WHERE id=? AND status='IN_PROGRESS'");
-  const timestamp = new Date(currentTime).toISOString();
-  const markExpired = db.transaction(() => {
-    let count = 0;
-    for (const attempt of attempts) {
-      if (Date.parse(attempt.started_at) + attempt.durationMinutes * 60000 <= currentTime) count += expire.run(timestamp, attempt.id).changes;
-    }
-    return count;
-  });
-  try { return markExpired(); } catch (error) {
-    if (error.code === 'SQLITE_BUSY' || error.code === 'SQLITE_LOCKED') return 0;
-    throw error;
-  }
-}
 function sendSubmissionFile(res, file) {
   if (!file || !/^[a-f0-9]{32}\.[a-z0-9]{1,8}$/.test(file.storage_key)) throw new InputError('Submission file not found.', 404);
   const path = resolve(uploadDir, file.storage_key);
@@ -224,9 +185,6 @@ function validateChallenge(input, current = null) {
     applicationOpensAt: opensAt, applicationClosesAt: closesAt, individualTaskDurationDays: duration,
   };
 }
-function challengeSkills(db, challengeId) {
-  return db.prepare('SELECT skill FROM challenge_skills WHERE challenge_id=? ORDER BY skill COLLATE NOCASE').all(challengeId).map(row => row.skill);
-}
 function challengeView(row) { // row comes from the challenges repository (already carries requiredSkills)
   return {
     id: row.id, companyId: row.company_id,
@@ -240,12 +198,12 @@ function challengeView(row) { // row comes from the challenges repository (alrea
   };
 }
 
-export function createPlatformRouter({ db, student, challenges, applications, requireCompanyAuth }) {
+export function createPlatformRouter({ student, challenges, applications, assessments, requireCompanyAuth }) {
   const router = express.Router();
   const studentAuth = requireStudent(student);
   const companyAuth = requireCompanyAuth;
 
-  expireAssessmentAttempts(db);
+  assessments.expireAttempts().catch(() => {});
 
   // Student accounts use their own table, session table, and cookie. Company users remain untouched.
   router.post('/student/auth/register', asyncRoute(async (req, res) => {
@@ -603,59 +561,62 @@ export function createPlatformRouter({ db, student, challenges, applications, re
     res.json({ evaluation });
   }));
 
-  // Company-authored MCQ assessments keep answer keys on the server. Student serializers
-  // below select only prompt/options and never include correct_answer.
-  router.post('/company/assessments', companyAuth, (req, res) => {
+  // Company-authored MCQ assessments keep answer keys on the server. Student-facing repo methods
+  // never select correct_answer; only company views (companyAssessment/companyAttempt) carry it.
+  const ownedAssessment = async (id, companyId) => {
+    const assessment = await assessments.getOwned(id, companyId);
+    if (!assessment) throw new InputError('Assessment not found.', 404);
+    return assessment;
+  };
+  const ownedAttempt = async (id, companyId) => {
+    const attempt = await assessments.getOwnedAttempt(id, companyId);
+    if (!attempt) throw new InputError('Assessment attempt not found.', 404);
+    return attempt;
+  };
+  router.post('/company/assessments', companyAuth, asyncRoute(async (req, res) => {
     const title = requiredText(req.body?.title, 'Assessment title', 150);
     const relatedSkill = requiredText(req.body?.relatedSkill, 'Related skill', 80);
     const duration = req.body?.durationMinutes == null || req.body.durationMinutes === '' ? null : Number(req.body.durationMinutes);
     if (duration != null && (!Number.isInteger(duration) || duration < 1 || duration > 1440)) throw new InputError('Duration must be between 1 and 1440 minutes.');
     const description = optionalText(req.body?.description, 'Description', 3000);
     const instructions = optionalText(req.body?.instructions, 'Instructions', 3000);
-    const id = newId(); const timestamp = nowIso();
-    db.prepare(`INSERT INTO skill_assessments(id,company_id,title,description,related_skill,instructions,duration_minutes,status,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,'DRAFT',?,?)`).run(id, req.session.company_id, title, description, relatedSkill, instructions, duration, timestamp, timestamp);
-    res.status(201).json({ assessment: companyAssessment(db, id) });
-  });
-  router.get('/company/assessments', companyAuth, (req, res) => {
-    const rows = db.prepare('SELECT id FROM skill_assessments WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
-    res.json({ assessments: rows.map(row => companyAssessment(db, row.id)) });
-  });
-  router.put('/company/assessments/:id', companyAuth, (req, res) => {
-    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    const assessment = await assessments.createAssessment({ id: newId(), companyId: req.session.company_id, title, description, relatedSkill, instructions, duration, timestamp: nowIso() });
+    res.status(201).json({ assessment });
+  }));
+  router.get('/company/assessments', companyAuth, asyncRoute(async (req, res) => {
+    res.json({ assessments: await assessments.listForCompany(req.session.company_id) });
+  }));
+  router.put('/company/assessments/:id', companyAuth, asyncRoute(async (req, res) => {
+    const assessment = await ownedAssessment(req.params.id, req.session.company_id);
     if (assessment.status !== 'DRAFT') throw new InputError('Only draft assessments can be edited.', 400);
     const title = requiredText(req.body?.title ?? assessment.title, 'Assessment title', 150);
     const relatedSkill = requiredText(req.body?.relatedSkill ?? assessment.related_skill, 'Related skill', 80);
     const duration = req.body?.durationMinutes === undefined ? assessment.duration_minutes : req.body.durationMinutes === null || req.body.durationMinutes === '' ? null : Number(req.body.durationMinutes);
     if (duration != null && (!Number.isInteger(duration) || duration < 1 || duration > 1440)) throw new InputError('Duration must be between 1 and 1440 minutes.');
-    db.prepare(`UPDATE skill_assessments SET title=?,description=?,related_skill=?,instructions=?,duration_minutes=?,updated_at=? WHERE id=? AND company_id=?`)
-      .run(title, optionalText(req.body?.description ?? assessment.description, 'Description', 3000), relatedSkill,
-        optionalText(req.body?.instructions ?? assessment.instructions, 'Instructions', 3000), duration, nowIso(), assessment.id, req.session.company_id);
-    res.json({ assessment: companyAssessment(db, assessment.id) });
-  });
-  router.post('/company/assessments/:id/questions', companyAuth, (req, res) => {
-    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    const updated = await assessments.updateIfDraft(assessment.id, req.session.company_id, { title, relatedSkill, duration, timestamp: nowIso(),
+      description: optionalText(req.body?.description ?? assessment.description, 'Description', 3000),
+      instructions: optionalText(req.body?.instructions ?? assessment.instructions, 'Instructions', 3000) });
+    if (!updated) throw new InputError('Only draft assessments can be edited.', 400); // published/closed between the check and the write
+    res.json({ assessment: updated });
+  }));
+  router.post('/company/assessments/:id/questions', companyAuth, asyncRoute(async (req, res) => {
+    const assessment = await ownedAssessment(req.params.id, req.session.company_id);
     if (assessment.status !== 'DRAFT') throw new InputError('Questions can be edited while the assessment is a draft.', 409);
     const questionText = requiredText(req.body?.questionText, 'Question', 3000);
     const options = ['A', 'B', 'C', 'D'].map(key => requiredText(req.body?.[`option${key}`], `Option ${key}`, 1000));
     const correctAnswer = typeof req.body?.correctAnswer === 'string' ? req.body.correctAnswer.toUpperCase() : '';
     if (!['A', 'B', 'C', 'D'].includes(correctAnswer)) throw new InputError('Correct answer must be A, B, C, or D.');
-    const questionOrder = req.body?.questionOrder == null ? (db.prepare('SELECT COALESCE(MAX(question_order),0)+1 AS next FROM skill_assessment_questions WHERE assessment_id=?').get(assessment.id).next) : Number(req.body.questionOrder);
-    if (!Number.isInteger(questionOrder) || questionOrder < 1 || questionOrder > 500) throw new InputError('Question order must be between 1 and 500.');
-    const id = newId(); const timestamp = nowIso();
-    try {
-      db.prepare(`INSERT INTO skill_assessment_questions(id,assessment_id,question_text,option_a,option_b,option_c,option_d,correct_answer,question_order,created_at,updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(id, assessment.id, questionText, ...options, correctAnswer, questionOrder, timestamp, timestamp);
-    } catch (error) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new InputError('A question already uses that order number.', 409);
-      throw error;
-    }
-    res.status(201).json({ question: companyQuestion(db, id) });
-  });
-  router.put('/company/assessments/:id/questions/:questionId', companyAuth, (req, res) => {
-    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    const order = req.body?.questionOrder == null ? await assessments.nextQuestionOrder(assessment.id) : Number(req.body.questionOrder);
+    if (!Number.isInteger(order) || order < 1 || order > 500) throw new InputError('Question order must be between 1 and 500.');
+    const timestamp = nowIso();
+    const question = await assessments.addQuestion({ id: newId(), assessmentId: assessment.id, questionText, options, correctAnswer, order, timestamp });
+    if (!question) throw new InputError('A question already uses that order number.', 409);
+    res.status(201).json({ question });
+  }));
+  router.put('/company/assessments/:id/questions/:questionId', companyAuth, asyncRoute(async (req, res) => {
+    const assessment = await ownedAssessment(req.params.id, req.session.company_id);
     if (assessment.status !== 'DRAFT') throw new InputError('Questions can be edited while the assessment is a draft.', 409);
-    const existing = db.prepare('SELECT * FROM skill_assessment_questions WHERE id=? AND assessment_id=?').get(req.params.questionId, assessment.id);
+    const existing = await assessments.getQuestion(assessment.id, req.params.questionId);
     if (!existing) throw new InputError('Question not found.', 404);
     const questionText = requiredText(req.body?.questionText ?? existing.question_text, 'Question', 3000);
     const options = ['A', 'B', 'C', 'D'].map(key => requiredText(req.body?.[`option${key}`] ?? existing[`option_${key.toLowerCase()}`], `Option ${key}`, 1000));
@@ -663,83 +624,63 @@ export function createPlatformRouter({ db, student, challenges, applications, re
     if (!['A', 'B', 'C', 'D'].includes(correctAnswer)) throw new InputError('Correct answer must be A, B, C, or D.');
     const order = req.body?.questionOrder == null ? existing.question_order : Number(req.body.questionOrder);
     if (!Number.isInteger(order) || order < 1 || order > 500) throw new InputError('Question order must be between 1 and 500.');
-    try {
-      db.prepare(`UPDATE skill_assessment_questions SET question_text=?,option_a=?,option_b=?,option_c=?,option_d=?,correct_answer=?,question_order=?,updated_at=?
-        WHERE id=? AND assessment_id=?`).run(questionText, ...options, correctAnswer, order, nowIso(), existing.id, assessment.id);
-    } catch (error) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new InputError('A question already uses that order number.', 409);
-      throw error;
-    }
-    res.json({ question: companyQuestion(db, existing.id) });
-  });
-  router.delete('/company/assessments/:id/questions/:questionId', companyAuth, (req, res) => {
-    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+    const question = await assessments.updateQuestion({ id: existing.id, assessmentId: assessment.id, questionText, options, correctAnswer, order, timestamp: nowIso() });
+    if (!question) throw new InputError('A question already uses that order number.', 409);
+    res.json({ question });
+  }));
+  router.delete('/company/assessments/:id/questions/:questionId', companyAuth, asyncRoute(async (req, res) => {
+    const assessment = await ownedAssessment(req.params.id, req.session.company_id);
     if (assessment.status !== 'DRAFT') throw new InputError('Questions can be edited while the assessment is a draft.', 409);
-    const removed = db.prepare('DELETE FROM skill_assessment_questions WHERE id=? AND assessment_id=?').run(req.params.questionId, assessment.id);
-    if (!removed.changes) throw new InputError('Question not found.', 404);
+    if (!await assessments.deleteQuestion(assessment.id, req.params.questionId)) throw new InputError('Question not found.', 404);
     res.json({ deleted: true });
-  });
-  router.post('/company/assessments/:id/publish', companyAuth, (req, res) => {
-    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
+  }));
+  router.post('/company/assessments/:id/publish', companyAuth, asyncRoute(async (req, res) => {
+    const assessment = await ownedAssessment(req.params.id, req.session.company_id);
     if (assessment.status === 'CLOSED') throw new InputError('A closed assessment cannot be published again.', 409);
-    if (!db.prepare('SELECT 1 FROM skill_assessment_questions WHERE assessment_id=? LIMIT 1').get(assessment.id)) throw new InputError('Add at least one question before publishing.');
-    db.prepare("UPDATE skill_assessments SET status='PUBLISHED',updated_at=? WHERE id=?").run(nowIso(), assessment.id);
-    res.json({ assessment: companyAssessment(db, assessment.id) });
-  });
-  router.post('/company/assessments/:id/close', companyAuth, (req, res) => {
-    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
-    db.prepare("UPDATE skill_assessments SET status='CLOSED',updated_at=? WHERE id=?").run(nowIso(), assessment.id);
+    if (!await assessments.hasQuestions(assessment.id)) throw new InputError('Add at least one question before publishing.');
+    res.json({ assessment: await assessments.setStatus(assessment.id, 'PUBLISHED', nowIso()) });
+  }));
+  router.post('/company/assessments/:id/close', companyAuth, asyncRoute(async (req, res) => {
+    const assessment = await ownedAssessment(req.params.id, req.session.company_id);
+    await assessments.setStatus(assessment.id, 'CLOSED', nowIso());
     res.json({ closed: true });
-  });
-  router.get('/student/assessments', studentAuth, (req, res) => {
-    const assessments = db.prepare("SELECT id,title,description,related_skill AS relatedSkill,instructions,duration_minutes AS durationMinutes FROM skill_assessments WHERE status='PUBLISHED' ORDER BY created_at DESC LIMIT 100").all();
-    res.json({ assessments });
-  });
-  router.get('/student/assessments/:id', studentAuth, (req, res) => {
-    const assessment = db.prepare(`SELECT id,title,description,related_skill AS relatedSkill,instructions,duration_minutes AS durationMinutes,status
-      FROM skill_assessments WHERE id=? AND (status='PUBLISHED' OR EXISTS (
-        SELECT 1 FROM skill_assessment_attempts a WHERE a.assessment_id=skill_assessments.id AND a.student_id=?
-      ))`).get(req.params.id, req.student.student_id);
+  }));
+  router.get('/student/assessments', studentAuth, asyncRoute(async (_req, res) => {
+    res.json({ assessments: await assessments.listPublished() });
+  }));
+  router.get('/student/assessments/:id', studentAuth, asyncRoute(async (req, res) => {
+    const assessment = await assessments.getForStudent(req.params.id, req.student.student_id);
     if (!assessment) throw new InputError('Assessment not found.', 404);
     res.json({ assessment });
-  });
-  router.post('/student/assessments/:id/attempts', studentAuth, (req, res) => {
+  }));
+  router.post('/student/assessments/:id/attempts', studentAuth, asyncRoute(async (req, res) => {
     if (!req.student.student_id) throw new InputError('Complete your student profile before starting an assessment.', 409);
-    const assessment = db.prepare("SELECT id FROM skill_assessments WHERE id=? AND status='PUBLISHED'").get(req.params.id);
-    if (!assessment) throw new InputError('Assessment is not available.', 404);
-    const id = newId(); const timestamp = nowIso();
-    try {
-      db.prepare(`INSERT INTO skill_assessment_attempts(id,assessment_id,student_id,started_at,status,review_status,created_at,updated_at)
-        VALUES (?,?,?,?,'IN_PROGRESS','PENDING',?,?)`).run(id, assessment.id, req.student.student_id, timestamp, timestamp, timestamp);
-    } catch (error) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new InputError('You already have an attempt for this assessment.', 409);
-      throw error;
-    }
-    res.status(201).json({ attempt: studentAttempt(db, id) });
-  });
-  router.get('/student/assessment-attempts', studentAuth, (req, res) => {
-    expireAssessmentAttempts(db);
+    if (!await assessments.isPublished(req.params.id)) throw new InputError('Assessment is not available.', 404);
+    const attempt = await assessments.startAttempt({ id: newId(), assessmentId: req.params.id, studentId: req.student.student_id, timestamp: nowIso() });
+    if (!attempt) throw new InputError('You already have an attempt for this assessment.', 409);
+    res.status(201).json({ attempt });
+  }));
+  router.get('/student/assessment-attempts', studentAuth, asyncRoute(async (req, res) => {
+    await assessments.expireAttempts();
     if (!req.student.student_id) return res.json({ attempts: [] });
-    const rows = db.prepare('SELECT id FROM skill_assessment_attempts WHERE student_id=? ORDER BY started_at DESC').all(req.student.student_id);
-    res.json({ attempts: rows.map(row => studentAttempt(db, row.id)) });
-  });
-  router.get('/student/assessment-attempts/:id', studentAuth, (req, res) => {
-    expireAssessmentAttempts(db);
-    const attempt = db.prepare('SELECT id FROM skill_assessment_attempts WHERE id=? AND student_id=?').get(req.params.id, req.student.student_id);
+    res.json({ attempts: await assessments.listStudentAttempts(req.student.student_id) });
+  }));
+  router.get('/student/assessment-attempts/:id', studentAuth, asyncRoute(async (req, res) => {
+    await assessments.expireAttempts();
+    const attempt = await assessments.getStudentAttempt(req.params.id, req.student.student_id);
     if (!attempt) throw new InputError('Assessment attempt not found.', 404);
-    res.json({ attempt: studentAttempt(db, attempt.id) });
-  });
-  router.put('/student/assessment-attempts/:id/answers', studentAuth, (req, res) => {
-    const attempt = db.prepare(`SELECT a.*,s.duration_minutes FROM skill_assessment_attempts a JOIN skill_assessments s ON s.id=a.assessment_id
-      WHERE a.id=? AND a.student_id=?`).get(req.params.id, req.student.student_id);
+    res.json({ attempt });
+  }));
+  router.put('/student/assessment-attempts/:id/answers', studentAuth, asyncRoute(async (req, res) => {
+    const attempt = await assessments.getAttemptRow(req.params.id, req.student.student_id);
     if (!attempt) throw new InputError('Assessment attempt not found.', 404);
-    expireAssessmentAttempts(db);
-    const refreshed = db.prepare('SELECT status FROM skill_assessment_attempts WHERE id=? AND student_id=?').get(attempt.id, req.student.student_id);
+    await assessments.expireAttempts();
+    const refreshed = await assessments.getAttemptRow(attempt.id, req.student.student_id);
     if (!refreshed) throw new InputError('Assessment attempt not found.', 404);
     if (refreshed.status !== 'IN_PROGRESS') throw new InputError(refreshed.status === 'EXPIRED' ? 'The assessment time limit has passed.' : 'This assessment attempt has already been submitted.', 409);
     const answers = req.body?.answers;
     if (!Array.isArray(answers) || answers.length > 500) throw new InputError('Answers must be a list of up to 500 responses.');
-    const questionIds = new Set(db.prepare('SELECT id FROM skill_assessment_questions WHERE assessment_id=?').all(attempt.assessment_id).map(row => row.id));
+    const questionIds = new Set(await assessments.questionIds(attempt.assessment_id));
     const normalized = answers.map(answer => {
       const questionId = text(answer?.questionId, 80);
       const selectedOption = typeof answer?.selectedOption === 'string' ? answer.selectedOption.toUpperCase() : '';
@@ -747,147 +688,69 @@ export function createPlatformRouter({ db, student, challenges, applications, re
       return { questionId, selectedOption };
     });
     if (new Set(normalized.map(answer => answer.questionId)).size !== normalized.length) throw new InputError('Each question can be answered only once.');
-    const timestamp = nowIso();
-    const save = db.transaction(() => {
-      const current = db.prepare(`SELECT a.status,a.started_at,s.duration_minutes AS durationMinutes FROM skill_assessment_attempts a
-        JOIN skill_assessments s ON s.id=a.assessment_id WHERE a.id=? AND a.student_id=?`).get(attempt.id, req.student.student_id);
-      if (!current || current.status !== 'IN_PROGRESS') return current?.status || 'MISSING';
-      if (current.durationMinutes && Date.parse(current.started_at) + current.durationMinutes * 60000 <= nowMs()) {
-        db.prepare("UPDATE skill_assessment_attempts SET status='EXPIRED',updated_at=? WHERE id=? AND status='IN_PROGRESS'").run(nowIso(), attempt.id);
-        return 'EXPIRED';
-      }
-      db.prepare('DELETE FROM skill_assessment_answers WHERE attempt_id=?').run(attempt.id);
-      const add = db.prepare('INSERT INTO skill_assessment_answers(id,attempt_id,question_id,selected_option,created_at,updated_at) VALUES (?,?,?,?,?,?)');
-      for (const answer of normalized) add.run(newId(), attempt.id, answer.questionId, answer.selectedOption, timestamp, timestamp);
-      if (req.body?.finalize === false) {
-        db.prepare("UPDATE skill_assessment_attempts SET updated_at=? WHERE id=? AND status='IN_PROGRESS'").run(timestamp, attempt.id);
-        return 'IN_PROGRESS';
-      }
-      db.prepare("UPDATE skill_assessment_attempts SET submitted_at=?,status='SUBMITTED',updated_at=? WHERE id=? AND status='IN_PROGRESS'").run(timestamp, timestamp, attempt.id);
-      return 'SUBMITTED';
-    });
-    const state = save();
+    const finalize = req.body?.finalize !== false;
+    const state = await assessments.saveAnswers({ attemptId: attempt.id, studentId: req.student.student_id, answers: normalized, finalize, timestamp: nowIso(), now: nowMs() });
     if (state === 'EXPIRED') throw new InputError('The assessment time limit has passed.', 409);
-    if (state !== (req.body?.finalize === false ? 'IN_PROGRESS' : 'SUBMITTED')) throw new InputError('This assessment attempt is no longer editable.', 409);
-    res.json({ attempt: studentAttempt(db, attempt.id) });
-  });
-  router.get('/company/assessments/:id/attempts', companyAuth, (req, res) => {
-    const assessment = ownedAssessment(db, req.params.id, req.session.company_id);
-    const attempts = db.prepare(`SELECT a.id,a.student_id AS studentId,a.started_at AS startedAt,a.submitted_at AS submittedAt,a.status,a.review_status AS reviewStatus,
-      a.manual_score AS manualScore,a.company_feedback AS companyFeedback,a.reviewed_at AS reviewedAt,s.full_name AS fullName,s.college
-      FROM skill_assessment_attempts a JOIN students s ON s.id=a.student_id WHERE a.assessment_id=? ORDER BY a.started_at DESC`).all(assessment.id);
-    res.json({ attempts });
-  });
-  router.get('/company/assessment-attempts/:id', companyAuth, (req, res) => {
-    const attempt = ownedAttempt(db, req.params.id, req.session.company_id);
-    res.json({ attempt: companyAttempt(db, attempt.id) });
-  });
-  router.put('/company/assessment-attempts/:id/evaluation', companyAuth, (req, res) => {
-    const attempt = ownedAttempt(db, req.params.id, req.session.company_id);
+    if (state !== (finalize ? 'SUBMITTED' : 'IN_PROGRESS')) throw new InputError('This assessment attempt is no longer editable.', 409);
+    res.json({ attempt: await assessments.getStudentAttempt(attempt.id, req.student.student_id) });
+  }));
+  router.get('/company/assessments/:id/attempts', companyAuth, asyncRoute(async (req, res) => {
+    const assessment = await ownedAssessment(req.params.id, req.session.company_id);
+    res.json({ attempts: await assessments.listAttemptsForAssessment(assessment.id) });
+  }));
+  router.get('/company/assessment-attempts/:id', companyAuth, asyncRoute(async (req, res) => {
+    const attempt = await ownedAttempt(req.params.id, req.session.company_id);
+    res.json({ attempt: await assessments.getCompanyAttempt(attempt.id) });
+  }));
+  router.put('/company/assessment-attempts/:id/evaluation', companyAuth, asyncRoute(async (req, res) => {
+    const attempt = await ownedAttempt(req.params.id, req.session.company_id);
     if (!attempt.submitted_at) throw new InputError('Submit an assessment attempt before reviewing it.', 409);
     const score = req.body?.manualScore == null || req.body.manualScore === '' ? null : Number(req.body.manualScore);
     if (score != null && (!Number.isFinite(score) || score < 0 || score > 100)) throw new InputError('Manual score must be between 0 and 100.');
     const feedback = optionalText(req.body?.companyFeedback, 'Company feedback', 5000);
-    const timestamp = nowIso();
-    db.prepare("UPDATE skill_assessment_attempts SET manual_score=?,company_feedback=?,review_status='REVIEWED',status='REVIEWED',reviewed_at=?,updated_at=? WHERE id=?")
-      .run(score, feedback, timestamp, timestamp, attempt.id);
-    res.json({ attempt: companyAttempt(db, attempt.id) });
-  });
+    await assessments.evaluateAttempt(attempt.id, { score, feedback, timestamp: nowIso() });
+    res.json({ attempt: await assessments.getCompanyAttempt(attempt.id) });
+  }));
 
   // Company talent discovery uses indexed stored skills and returns the transparent overlap.
-  // Hidden profiles (profile_visible=0) are only visible to companies whose challenges the student applied to.
-  const VISIBLE_TO_COMPANY = `(s.profile_visible=1 OR EXISTS (SELECT 1 FROM applications a JOIN challenges c ON c.id=a.challenge_id WHERE a.student_id=s.id AND c.company_id=?))`;
-  router.get('/company/talent', companyAuth, (req, res) => {
+  // Hidden profiles (profile_visible=0) are only visible to companies whose challenges the student applied to (enforced in the repo).
+  router.get('/company/talent', companyAuth, asyncRoute(async (req, res) => {
     const requestedSkills = [...new Map((typeof req.query.skills === 'string' ? req.query.skills.split(',').map(value => text(value, 60)).filter(Boolean).slice(0, 20) : []).map(skill => [skill.toLowerCase(), skill])).values()];
     const college = typeof req.query.college === 'string' ? text(req.query.college, 200) : '';
     const limit = Math.min(Math.max(Math.trunc(Number(req.query.limit)) || 24, 1), 50);
     const offset = Math.max(Math.trunc(Number(req.query.offset)) || 0, 0);
-    const companyId = req.session.company_id;
-    const clauses = [VISIBLE_TO_COMPANY];
-    const params = [companyId];
-    if (college) { clauses.push('s.college LIKE ? ESCAPE \'\\\' COLLATE NOCASE'); params.push(`%${college.replace(/[\\%_]/g, '\\$&')}%`); }
-    const marks = requestedSkills.map(() => '?').join(',');
-    if (requestedSkills.length) {
-      clauses.push(`EXISTS (SELECT 1 FROM student_skills ss WHERE ss.student_id=s.id AND ss.skill COLLATE NOCASE IN (${marks}))`);
-      params.push(...requestedSkills);
-    }
-    const where = clauses.join(' AND ');
-    const total = db.prepare(`SELECT COUNT(*) AS n FROM students s WHERE ${where}`).get(...params).n;
-    const matchExpr = requestedSkills.length ? `(SELECT COUNT(DISTINCT lower(ss.skill)) FROM student_skills ss WHERE ss.student_id=s.id AND ss.skill COLLATE NOCASE IN (${marks}))` : '0';
-    // Sort by match count first, then paginate, so LIMIT/OFFSET apply to the ranked list.
-    const rows = db.prepare(`SELECT s.id, ${matchExpr} AS matchCount FROM students s WHERE ${where} ORDER BY matchCount DESC, s.updated_at DESC, s.id LIMIT ? OFFSET ?`)
-      .all(...(requestedSkills.length ? requestedSkills : []), ...params, limit, offset);
-    const students = rows.map(row => {
-      const profile = studentProfile(db, row.id, { includeResume: true });
+    const { rows, total } = await assessments.searchTalent({ companyId: req.session.company_id, skills: requestedSkills, college, limit, offset });
+    const found = await Promise.all(rows.map(async row => {
+      const profile = await student.buildStudentProfile(row.id, { includeResume: true });
+      if (!profile) return null;
       const matchedSkills = requestedSkills.filter(skill => profile.skills.some(known => known.toLowerCase() === skill.toLowerCase()));
       return { ...profile, matchedSkills, matchCount: row.matchCount };
-    });
-    res.json({ students, total, limit, offset, matchBasis: requestedSkills.length ? 'Number of requested skills found on the profile; ties use most recently updated profile.' : 'Most recently updated student profiles.' });
-  });
-  router.get('/company/talent/:id', companyAuth, (req, res) => {
-    const visible = db.prepare(`SELECT 1 FROM students s WHERE s.id=? AND ${VISIBLE_TO_COMPANY}`).get(req.params.id, req.session.company_id);
-    const profile = visible && studentProfile(db, req.params.id, { includeResume: true });
+    }));
+    res.json({ students: found.filter(Boolean), total, limit, offset, matchBasis: requestedSkills.length ? 'Number of requested skills found on the profile; ties use most recently updated profile.' : 'Most recently updated student profiles.' });
+  }));
+  router.get('/company/talent/:id', companyAuth, asyncRoute(async (req, res) => {
+    const profile = await assessments.isTalentVisible(req.params.id, req.session.company_id) && await student.buildStudentProfile(req.params.id, { includeResume: true });
     if (!profile) throw new InputError('Student profile not found.', 404);
     res.json({ profile });
-  });
-  router.get('/company/saved-students', companyAuth, (req, res) => {
-    const rows = db.prepare('SELECT student_id,note,created_at FROM saved_students WHERE company_id=? ORDER BY created_at DESC').all(req.session.company_id);
-    res.json({ students: rows.map(row => ({ ...studentProfile(db, row.student_id, { includeResume: true }), note: row.note, savedAt: row.created_at })) });
-  });
-  router.post('/company/saved-students/:studentId', companyAuth, (req, res) => {
-    if (!db.prepare('SELECT 1 FROM students WHERE id=?').get(req.params.studentId)) throw new InputError('Student profile not found.', 404);
-    const note = optionalText(req.body?.note, 'Note', 1000); const timestamp = nowIso();
-    db.prepare(`INSERT INTO saved_students(company_id,student_id,note,created_at) VALUES (?,?,?,?)
-      ON CONFLICT(company_id,student_id) DO UPDATE SET note=excluded.note`).run(req.session.company_id, req.params.studentId, note, timestamp);
+  }));
+  router.get('/company/saved-students', companyAuth, asyncRoute(async (req, res) => {
+    const rows = await assessments.listSaved(req.session.company_id);
+    const list = await Promise.all(rows.map(async row => {
+      const profile = await student.buildStudentProfile(row.student_id, { includeResume: true });
+      return profile && { ...profile, note: row.note, savedAt: row.created_at };
+    }));
+    res.json({ students: list.filter(Boolean) });
+  }));
+  router.post('/company/saved-students/:studentId', companyAuth, asyncRoute(async (req, res) => {
+    if (!await assessments.studentExists(req.params.studentId)) throw new InputError('Student profile not found.', 404);
+    const note = optionalText(req.body?.note, 'Note', 1000);
+    await assessments.saveStudent(req.session.company_id, req.params.studentId, note, nowIso());
     res.status(201).json({ saved: true });
-  });
-  router.delete('/company/saved-students/:studentId', companyAuth, (req, res) => {
-    const deleted = db.prepare('DELETE FROM saved_students WHERE company_id=? AND student_id=?').run(req.session.company_id, req.params.studentId);
-    if (!deleted.changes) throw new InputError('Saved student not found.', 404);
+  }));
+  router.delete('/company/saved-students/:studentId', companyAuth, asyncRoute(async (req, res) => {
+    if (!await assessments.removeSaved(req.session.company_id, req.params.studentId)) throw new InputError('Saved student not found.', 404);
     res.json({ saved: false });
-  });
+  }));
 
   return router;
-}
-
-function companyAssessment(db, id) {
-  const row = db.prepare('SELECT * FROM skill_assessments WHERE id=?').get(id);
-  return { id: row.id, title: row.title, description: row.description, relatedSkill: row.related_skill, instructions: row.instructions,
-    durationMinutes: row.duration_minutes, status: row.status, createdAt: row.created_at,
-    attemptCount: db.prepare('SELECT COUNT(*) AS n FROM skill_assessment_attempts WHERE assessment_id=?').get(id).n, questions: db.prepare('SELECT id,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,correct_answer AS correctAnswer,question_order AS questionOrder FROM skill_assessment_questions WHERE assessment_id=? ORDER BY question_order').all(id) };
-}
-function companyQuestion(db, id) {
-  return db.prepare('SELECT id,assessment_id AS assessmentId,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,correct_answer AS correctAnswer,question_order AS questionOrder FROM skill_assessment_questions WHERE id=?').get(id);
-}
-function studentQuestions(db, assessmentId) {
-  return db.prepare('SELECT id,question_text AS questionText,option_a AS optionA,option_b AS optionB,option_c AS optionC,option_d AS optionD,question_order AS questionOrder FROM skill_assessment_questions WHERE assessment_id=? ORDER BY question_order').all(assessmentId);
-}
-function studentAttempt(db, id) {
-  const row = db.prepare(`SELECT a.id,a.assessment_id AS assessmentId,a.started_at AS startedAt,a.submitted_at AS submittedAt,a.status,a.review_status AS reviewStatus,
-    a.manual_score AS manualScore,a.company_feedback AS companyFeedback,a.reviewed_at AS reviewedAt,s.title AS assessmentTitle,s.duration_minutes AS durationMinutes,s.status AS assessmentStatus
-    FROM skill_assessment_attempts a JOIN skill_assessments s ON s.id=a.assessment_id WHERE a.id=?`).get(id);
-  row.expiresAt = row.durationMinutes ? new Date(Date.parse(row.startedAt) + row.durationMinutes * 60000).toISOString() : null;
-  row.serverNow = nowIso();
-  row.questions = studentQuestions(db, row.assessmentId).map(question => ({ ...question, selectedOption: db.prepare('SELECT selected_option FROM skill_assessment_answers WHERE attempt_id=? AND question_id=?').get(id, question.id)?.selected_option || null }));
-  return row;
-}
-function companyAttempt(db, id) {
-  const row = db.prepare(`SELECT a.id,a.assessment_id AS assessmentId,a.student_id AS studentId,a.started_at AS startedAt,a.submitted_at AS submittedAt,a.status,a.review_status AS reviewStatus,
-    a.manual_score AS manualScore,a.company_feedback AS companyFeedback,a.reviewed_at AS reviewedAt,s.full_name AS fullName,s.college
-    FROM skill_assessment_attempts a JOIN students s ON s.id=a.student_id WHERE a.id=?`).get(id);
-  row.questions = db.prepare(`SELECT q.id,q.question_text AS questionText,q.option_a AS optionA,q.option_b AS optionB,q.option_c AS optionC,q.option_d AS optionD,
-    q.correct_answer AS correctAnswer,q.question_order AS questionOrder,aa.selected_option AS selectedOption FROM skill_assessment_questions q
-    LEFT JOIN skill_assessment_answers aa ON aa.question_id=q.id AND aa.attempt_id=? WHERE q.assessment_id=? ORDER BY q.question_order`).all(id, row.assessmentId);
-  return row;
-}
-function ownedAssessment(db, id, companyId) {
-  const assessment = db.prepare('SELECT * FROM skill_assessments WHERE id=? AND company_id=?').get(id, companyId);
-  if (!assessment) throw new InputError('Assessment not found.', 404);
-  return assessment;
-}
-function ownedAttempt(db, id, companyId) {
-  const attempt = db.prepare(`SELECT a.* FROM skill_assessment_attempts a JOIN skill_assessments s ON s.id=a.assessment_id
-    WHERE a.id=? AND s.company_id=?`).get(id, companyId);
-  if (!attempt) throw new InputError('Assessment attempt not found.', 404);
-  return attempt;
 }
