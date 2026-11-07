@@ -42,6 +42,7 @@ export async function ensureIndexes(db) {
   await idx('applications', [
     { key: { challenge_id: 1, student_id: 1 }, unique: true, name: 'applications_challenge_student_uq' },
     { key: { student_id: 1, applied_at: -1 }, name: 'applications_student_idx' },
+    { key: { challenge_id: 1, applied_at: -1 }, name: 'applications_challenge_idx' },
     { key: { status: 1, individual_deadline: 1 }, name: 'applications_deadline_idx' },
   ]);
   await idx('submissions', [{ key: { application_id: 1 }, unique: true, name: 'submissions_application_uq' }]);
