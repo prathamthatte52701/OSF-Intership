@@ -10,8 +10,8 @@ import { sendOtpEmail, sendPasswordChangedEmail, sendSetupEmail } from './mail.j
 import { hashOtp, hashPassword, newId, newOtp, newSecret, newUserId, otpMatches, sha256, validatePassword, verifyPassword, cookieValue } from './security.js';
 import { InputError, validateCompanyProfile, validateRegistration } from './validation.js';
 
-// DB_DRIVER=sqlite (default) | mongo. See server/README.md and repositories/index.js.
-const { driver, auth, challenges, student, applications, assessments } = await createRepositories();
+// MongoDB is the only database (MONGODB_URI). See server/README.md and repositories/index.js.
+const { conn, auth, challenges, student, applications, assessments } = await createRepositories();
 const app = express();
 const port = Number(process.env.PORT || 4000);
 const otpLifeMs = 5 * 60 * 1000;
@@ -250,8 +250,6 @@ app.post('/api/auth/change-password', requireAuth, asyncRoute(async (req, res) =
   res.json({ changed: true, notification });
 }));
 
-// All route groups (auth, student, challenges, applications, assessments/talent) are ported to
-// both drivers now, so the platform router mounts the same way regardless of DB_DRIVER.
 app.use('/api', createPlatformRouter({ student, challenges, applications, assessments, requireCompanyAuth: requireAuth }));
 
 if (process.env.NODE_ENV !== 'test') {
@@ -267,10 +265,12 @@ app.use((error, _req, res, _next) => {
   let status = 500; let message = 'Something went wrong. Please try again.';
   if (error?.type === 'entity.too.large') { status = 413; message = 'The request is too large.'; }
   else if (error?.type?.startsWith('entity.') || error instanceof SyntaxError) { status = 400; message = 'The request could not be read.'; }
-  else if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || error?.code === 11000) { status = 409; message = 'This record already exists.'; }
+  else if (error?.code === 11000) { status = 409; message = 'This record already exists.'; }
   if (status >= 500) console.error(`OSF API request failed (${error?.code || error?.name || 'Error'}).`);
   res.status(status).json({ error: message });
 });
 
+// Releases the MongoDB connection pool (tests, graceful shutdown).
+export const closeDatabase = () => conn.close();
 export { app };
-if (process.env.NODE_ENV !== 'test') app.listen(port, () => console.log(`OSF API listening on port ${port} (DB_DRIVER=${driver})`));
+if (process.env.NODE_ENV !== 'test') app.listen(port, () => console.log(`OSF API listening on port ${port}`));

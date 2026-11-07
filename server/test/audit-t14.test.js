@@ -1,27 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { skip, useThrowawayDb } from '../testSupport/mongo.js';
 
-const testDirectory = mkdtempSync(join(tmpdir(), 'osf-audit-'));
 process.env.NODE_ENV = 'test';
-process.env.DATABASE_PATH = join(testDirectory, 'audit.sqlite');
 process.env.OTP_HMAC_SECRET = 'platform-test-only-otp-pepper-32-characters-long';
 process.env.APP_ORIGIN = 'http://localhost:3000';
 
-const [{ app }, { db }, { sha256 }, { newSecret, newId }, mail] = await Promise.all([
-  import('../index.js'), import('../db.js'), import('../security.js'), import('../security.js'), import('../mail.js'),
-]);
+const mongo = await useThrowawayDb();
+const { app, closeDatabase } = mongo ? await import('../index.js') : {};
+const [{ sha256, newSecret, newId }, mail] = await Promise.all([import('../security.js'), import('../mail.js')]);
+const db = mongo?.db;
 const sentMail = [];
 mail.setMailSenderForTests(async message => { sentMail.push(message); return { messageId: 'platform-test-only' }; });
-const server = createServer(app);
-app.set('trust proxy', 'loopback');
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const origin = `http://127.0.0.1:${server.address().port}`;
+const server = app && createServer(app);
+if (app) {
+  app.set('trust proxy', 'loopback');
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+}
+const origin = server && `http://127.0.0.1:${server.address().port}`;
 let sequence = 20;
 let testUploadPath;
 async function request(path, { method = 'GET', body, cookie, headers = {}, raw } = {}) {
@@ -33,31 +32,30 @@ async function request(path, { method = 'GET', body, cookie, headers = {}, raw }
   const payload = response.headers.get('content-type')?.includes('application/json') ? await response.json() : null;
   return { status: response.status, body: payload, headers: response.headers, raw: payload == null ? await response.arrayBuffer() : null };
 }
-function companySession(companyId, email) {
+async function companySession(companyId, email) {
   const timestamp = new Date().toISOString();
   const accountId = newId(); const token = newSecret();
-  db.prepare(`INSERT INTO companies(id,company_name,address1,country,country_code,city,contact_name,email,status,created_at,verified_at)
-    VALUES (?,?,?,'India','IN','Pune','Company Owner',?,'VERIFIED',?,?)`).run(companyId, 'Test Company', '1 Test Road', email, timestamp, timestamp);
-  db.prepare(`INSERT INTO users(id,company_id,user_id,password_hash,created_at,email_verified,must_change_password,password_setup_status)
-    VALUES (?,?,?, 'test-only-hash',?,1,0,'COMPLETED')`).run(accountId, companyId, `OSF-${companyId}`, timestamp);
-  db.prepare('INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)').run(sha256(token), accountId, Date.now() + 60000, timestamp);
+  await db.collection('companies').insertOne({ _id: companyId, company_name: 'Test Company', address1: '1 Test Road', country: 'India', country_code: 'IN', city: 'Pune', contact_name: 'Company Owner', email, status: 'VERIFIED', created_at: timestamp, verified_at: timestamp });
+  await db.collection('users').insertOne({ _id: accountId, company_id: companyId, user_id: `OSF-${companyId}`, password_hash: 'test-only-hash', created_at: timestamp, email_verified: 1, must_change_password: 0, password_setup_status: 'COMPLETED' });
+  const expires = Date.now() + 60000;
+  await db.collection('sessions').insertOne({ token_hash: sha256(token), user_id: accountId, expires_at: expires, expires_at_date: new Date(expires), created_at: timestamp });
   return { cookie: `osf_session=${encodeURIComponent(token)}`, accountId };
 }
 
 
-function studentSession(email) {
+async function studentSession(email) {
   const accountId = newId(); const studentId = newId(); const ts = new Date().toISOString(); const token = newSecret();
-  db.prepare(`INSERT INTO student_users(id,email,password_hash,email_verified,account_status,password_created_at,updated_at,created_at)
-    VALUES (?,?,'test-hash',1,'ACTIVE',?,?,?)`).run(accountId, email, ts, ts, ts);
-  db.prepare('INSERT INTO students(id,account_id,full_name,created_at,updated_at) VALUES (?,?,?,?,?)').run(studentId, accountId, 'Audit Student', ts, ts);
-  db.prepare('INSERT INTO student_sessions(token_hash,student_user_id,expires_at,created_at) VALUES (?,?,?,?)').run(sha256(token), accountId, Date.now() + 60000, ts);
+  await db.collection('student_users').insertOne({ _id: accountId, email, password_hash: 'test-hash', email_verified: 1, account_status: 'ACTIVE', password_created_at: ts, updated_at: ts, created_at: ts });
+  await db.collection('students').insertOne({ _id: studentId, account_id: accountId, full_name: 'Audit Student', created_at: ts, updated_at: ts });
+  const expires = Date.now() + 60000;
+  await db.collection('student_sessions').insertOne({ token_hash: sha256(token), student_user_id: accountId, expires_at: expires, expires_at_date: new Date(expires), created_at: ts });
   return { cookie: `osf_student_session=${encodeURIComponent(token)}`, studentId };
 }
 
-test('T14 audit fixes: edit lock, public window, assessment privacy, drafts, uploads', async t => {
-  t.after(async () => { await new Promise(resolve => server.close(resolve)); db.close(); rmSync(testDirectory, { recursive: true, force: true }); });
-  const company = companySession('audit-co', 'audit@co.example');
-  const student = studentSession('audit-student@example.com');
+test('T14 audit fixes: edit lock, public window, assessment privacy, drafts, uploads', { skip }, async t => {
+  t.after(async () => { await new Promise(resolve => server.close(resolve)); await closeDatabase(); await mongo.drop(); });
+  const company = await companySession('audit-co', 'audit@co.example');
+  const student = await studentSession('audit-student@example.com');
   const now = Date.now();
   const base = { roleTitle: 'Audit Role', taskDescription: 'Do the thing.', requiredSkills: ['JavaScript'], applicationOpensAt: new Date(now - 3600000).toISOString(), applicationClosesAt: new Date(now + 86400000).toISOString(), individualTaskDurationDays: 2 };
   const create = async overrides => (await request('/api/company/challenges', { method: 'POST', cookie: company.cookie, body: { ...base, ...overrides } }));
@@ -103,18 +101,18 @@ test('T14 audit fixes: edit lock, public window, assessment privacy, drafts, upl
   const saved = (await request(`/api/student/applications/${applicationId}/submission`, { cookie: student.cookie })).body.submission;
   assert.equal(saved.supportingInformation, 'work in progress');
   assert.equal(saved.submittedAt, null);
-  assert.equal(db.prepare('SELECT status FROM applications WHERE id=?').get(applicationId).status, 'IN_PROGRESS');
+  assert.equal((await db.collection('applications').findOne({ _id: applicationId })).status, 'IN_PROGRESS');
 
   const filePath = key => fileURLToPath(new URL(`../uploads/${key}`, import.meta.url));
   const upload = name => request(`/api/student/applications/${applicationId}/file`, { method: 'PUT', cookie: student.cookie, raw: Buffer.from(name), headers: { 'content-type': 'application/octet-stream', 'x-file-name': `${name}.txt`, 'x-file-mime': 'text/plain' } });
   const first = await upload('one'); assert.equal(first.status, 201);
-  const firstKey = db.prepare('SELECT storage_key FROM submission_files WHERE id=?').get(first.body.file.id).storage_key;
+  const firstKey = (await db.collection('submission_files').findOne({ _id: first.body.file.id })).storage_key;
   assert.equal(existsSync(filePath(firstKey)), true);
   const second = await upload('two'); assert.equal(second.status, 201);
-  const secondKey = db.prepare('SELECT storage_key FROM submission_files WHERE id=?').get(second.body.file.id).storage_key;
+  const secondKey = (await db.collection('submission_files').findOne({ _id: second.body.file.id })).storage_key;
   assert.equal(existsSync(filePath(firstKey)), false);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM submission_files WHERE application_id=?').get(applicationId).n, 1);
-  assert.equal(db.prepare('SELECT file_reference FROM submissions WHERE application_id=?').get(applicationId).file_reference, second.body.file.id);
+  assert.equal(await db.collection('submission_files').countDocuments({ application_id: applicationId }), 1);
+  assert.equal((await db.collection('submissions').findOne({ application_id: applicationId })).file_reference, second.body.file.id);
   assert.equal((await request(`/api/student/applications/${applicationId}/submission`, { method: 'PUT', cookie: student.cookie, body: { githubUrl: 'https://github.com/a/b' } })).status, 200);
   assert.equal((await request(draftPath, { method: 'PUT', cookie: student.cookie, body: { supportingInformation: 'late' } })).status, 409);
 
