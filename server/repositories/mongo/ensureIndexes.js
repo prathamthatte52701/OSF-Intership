@@ -54,6 +54,5 @@ export async function ensureIndexes(db) {
     { key: { assessment_id: 1, student_id: 1 }, unique: true, name: 'attempts_assessment_student_uq' },
     { key: { student_id: 1, started_at: -1 }, name: 'attempts_student_idx' },
   ]);
-  await idx('skill_assessment_answers', [{ key: { attempt_id: 1, question_id: 1 }, unique: true, name: 'answers_attempt_question_uq' }]);
   await idx('saved_students', [{ key: { company_id: 1, student_id: 1 }, unique: true, name: 'saved_company_student_uq' }, { key: { student_id: 1 }, name: 'saved_student_idx' }]);
 }

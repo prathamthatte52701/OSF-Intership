@@ -5,13 +5,13 @@ import rateLimit from 'express-rate-limit';
 import { failedLoginLimiter, generalLimiter, loginBlockedMessage, sendTooMany } from './rateLimits.js';
 import { randomBytes } from 'node:crypto';
 import { createRepositories } from './repositories/index.js';
-import { createPlatformRouter, expireAssessmentAttempts } from './platform.js';
+import { createPlatformRouter } from './platform.js';
 import { sendOtpEmail, sendPasswordChangedEmail, sendSetupEmail } from './mail.js';
 import { hashOtp, hashPassword, newId, newOtp, newSecret, newUserId, otpMatches, sha256, validatePassword, verifyPassword, cookieValue } from './security.js';
 import { InputError, validateCompanyProfile, validateRegistration } from './validation.js';
 
 // DB_DRIVER=sqlite (default) | mongo. See server/README.md and repositories/index.js.
-const { driver, auth, db, challenges, student } = await createRepositories();
+const { driver, auth, db, challenges, student, assessments } = await createRepositories();
 const app = express();
 const port = Number(process.env.PORT || 4000);
 const otpLifeMs = 5 * 60 * 1000;
@@ -251,15 +251,15 @@ app.post('/api/auth/change-password', requireAuth, asyncRoute(async (req, res) =
 }));
 
 if (driver === 'sqlite') {
-  app.use('/api', createPlatformRouter({ db, student, challenges, requireCompanyAuth: requireAuth }));
+  app.use('/api', createPlatformRouter({ db, student, challenges, assessments, requireCompanyAuth: requireAuth }));
 } else {
   // ponytail: auth/student/challenges are ported to Mongo so far; applications/assessments/talent still need repositories.
   app.use('/api', (_req, res) => res.status(501).json({ error: 'This endpoint is not available on the MongoDB driver yet.' }));
 }
 
-if (driver === 'sqlite' && process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test') {
   const assessmentExpirySweep = setInterval(() => {
-    try { expireAssessmentAttempts(db); } catch { /* The next sweep retries without changing attempt data. */ }
+    assessments.expireAttempts().catch(() => { /* The next sweep retries without changing attempt data. */ });
   }, 15_000);
   assessmentExpirySweep.unref();
 }

@@ -4,7 +4,8 @@
 // Ported groups: `auth` (company registration/OTP/setup/login/sessions/profile), `challenges`
 // (public + company challenge CRUD), and `student` (student auth/profile/projects + shared
 // buildStudentProfile) in both drivers.
-// Not yet extracted: applications, assessments, talent/saved students - these still use
+// `assessments` (assessments + talent discovery + saved students) is ported in both drivers.
+// Not yet extracted: applications - these still use
 // `db.prepare` in platform.js (sqlite only). `db` is returned for them and is null under the
 // mongo driver.
 export async function createRepositories(driver = process.env.DB_DRIVER || 'sqlite') {
@@ -13,11 +14,13 @@ export async function createRepositories(driver = process.env.DB_DRIVER || 'sqli
     const { createAuthRepo } = await import('./sqlite/auth.js');
     const { createChallengesRepo } = await import('./sqlite/challenges.js');
     const { createStudentRepo } = await import('./sqlite/student.js');
+    const { createAssessmentsRepo } = await import('./sqlite/assessments.js');
     return {
       driver, db,
       auth: createAuthRepo(db),
       challenges: createChallengesRepo(db),
       student: createStudentRepo(db),
+      assessments: createAssessmentsRepo(db),
     };
   }
   if (driver === 'mongo') {
