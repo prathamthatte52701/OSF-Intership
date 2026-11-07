@@ -1,5 +1,4 @@
-// MongoDB implementation of the challenges repository (DB_DRIVER=mongo). Same interface as sqlite/challenges.js.
-// UNVERIFIED against a live cluster (none available when written) - reviewed by reasoning only.
+// MongoDB implementation of the challenges repository.
 // Skills are embedded as `required_skills` (sorted case-insensitively, like SQL ORDER BY ... COLLATE NOCASE).
 import { NOCASE } from './ensureIndexes.js';
 

@@ -1,5 +1,4 @@
-// MongoDB implementation of the ASSESSMENTS + TALENT/SAVED-STUDENTS repository (DB_DRIVER=mongo). Same interface as sqlite/assessments.js.
-// UNVERIFIED against a live cluster (none available when written) - reviewed by reasoning only.
+// MongoDB implementation of the ASSESSMENTS + TALENT/SAVED-STUDENTS repository.
 // Collections keep the SQL table names/column names (`_id` = SQL `id`): skill_assessments, skill_assessment_questions,
 // skill_assessment_attempts, saved_students. DESIGN: a student's answers are EMBEDDED in the attempt document (`answers: [{question_id,
 // selected_option}]`), so answer submission is a single conditional update (`status:'IN_PROGRESS'`) - atomic without transactions.

@@ -1,4 +1,4 @@
-// Replaces server/migrations/*.sql for the Mongo driver. Idempotent: safe to run on every startup.
+// Defines every index (the single source of truth for the schema; there are no migrations). Idempotent: safe to run on every startup.
 // Documents keep the SQL column names; `_id` holds the SQL `id` string.
 // Case-insensitive uniqueness (SQL `COLLATE NOCASE`) uses a strength-2 collation; queries must pass the same collation.
 export const NOCASE = { locale: 'en', strength: 2 };

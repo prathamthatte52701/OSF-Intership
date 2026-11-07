@@ -1,5 +1,4 @@
-// MongoDB implementation of the applications repository (DB_DRIVER=mongo). Same interface as sqlite/applications.js.
-// UNVERIFIED against a live cluster (none available when written) - reviewed by reasoning only.
+// MongoDB implementation of the applications repository.
 // Collections: applications, submissions, submission_files, evaluations (documents keep SQL column names; `_id` = SQL `id`).
 // Uniqueness: applications (challenge_id, student_id), submissions (application_id), evaluations (application_id) are unique indexes.
 import { NOCASE } from './ensureIndexes.js';

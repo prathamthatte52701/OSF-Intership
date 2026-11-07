@@ -1,5 +1,4 @@
-// MongoDB implementation of the company-auth repository (DB_DRIVER=mongo). Same interface as sqlite/auth.js.
-// UNVERIFIED against a live cluster (none available when written) - reviewed by reasoning only.
+// MongoDB implementation of the company-auth repository.
 import { NOCASE } from './ensureIndexes.js';
 
 const SETUP_ELIGIBLE = { email_verified: 1, password_setup_status: 'PENDING', must_change_password: 1, password_hash: null };
