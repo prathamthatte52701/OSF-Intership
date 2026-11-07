@@ -13,12 +13,6 @@
   padding: 0;
 }
 
-.cp-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
-}
-
 .challenge-filter-tabs {
   display: flex;
   gap: 8px;

@@ -221,55 +221,6 @@ export function ExploreChallengesPage({ go }) {
   </>;
 }
 
-export function ChallengeDetailsPage({ challengeId, go, notify }) {
-  const [challenge, setChallenge] = useState(null);
-  const [application, setApplication] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [applyError, setApplyError] = useState('');
-  const [now, setNow] = useState(Date.now());
-
-  async function load() {
-    setLoading(true); setError('');
-    try {
-      const [challengeResult, applicationsResult] = await Promise.all([studentApi.challenge(challengeId), studentApi.applications()]);
-      setChallenge(challengeResult.challenge);
-      setApplication((applicationsResult.applications || []).find(item => item.challengeId === challengeId) || null);
-    } catch (loadError) { setError(errorMessage(loadError)); }
-    finally { setLoading(false); }
-  }
-  useEffect(() => { load(); }, [challengeId]);
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
-
-  const opens = challenge ? Date.parse(challenge.applicationOpensAt) : 0;
-  const closes = challenge ? Date.parse(challenge.applicationClosesAt) : 0;
-  const windowNotOpen = now < opens;
-  const windowClosed = now > closes;
-
-  async function apply() {
-    setBusy(true); setApplyError('');
-    try { const result = await studentApi.apply(challengeId); setApplication({ ...result.application, roleTitle: challenge.roleTitle }); notify('success', 'Your application was submitted.'); }
-    catch (applyError) { setApplyError(applyError.message || 'The application could not be submitted.'); }
-    finally { setBusy(false); }
-  }
-
-  if (loading) return <LoadingState label="Loading challenge details…" />;
-  if (error || !challenge) return <><PageTitle eyebrow="CHALLENGE DETAILS" title="Challenge unavailable" /><StateBlock title="This challenge could not be opened" tone="error" action={<button className="sp-button sp-button-secondary" onClick={() => go('/student/challenges')}>Back to challenges</button>}>{error || 'The challenge may no longer be published.'}</StateBlock></>;
-
-  return <>
-    <button className="sp-back-link" onClick={() => go('/student/challenges')}>← All challenges</button>
-    <div className="sp-detail-hero"><div className="sp-company-mark sp-company-mark-large">{(challenge.companyName || 'C').charAt(0).toUpperCase()}</div><div className="sp-detail-hero-copy"><span className="sp-eyebrow">PUBLISHED CHALLENGE</span><h1>{challenge.roleTitle}</h1><p>{challenge.companyName || 'Company information unavailable'}</p></div><StatusPill tone={challenge.isPaid ? 'success' : 'neutral'}>{challenge.isPaid ? 'Paid opportunity' : 'Unpaid opportunity'}</StatusPill></div>
-    <div className="sp-detail-grid"><div className="sp-detail-main"><section className="sp-panel"><div className="sp-section-heading"><span className="sp-eyebrow">THE TASK</span><h2>Challenge brief</h2></div><p className="sp-long-copy">{challenge.taskDescription}</p>{challenge.reference && <div className="sp-detail-info"><strong>Reference</strong><p>{challenge.reference}</p></div>}{challenge.language && <div className="sp-detail-info"><strong>Language or tools</strong><p>{challenge.language}</p></div>}{challenge.extraInformation && <div className="sp-detail-info"><strong>Additional information</strong><p>{challenge.extraInformation}</p></div>}</section><section className="sp-panel"><div className="sp-section-heading"><span className="sp-eyebrow">WHAT YOU’LL NEED</span><h2>Required skills</h2></div><div className="sp-chip-list">{challenge.requiredSkills?.map(skillName => <span className="sp-chip" key={skillName}>{skillName}</span>)}</div></section></div>
-      <aside className="sp-detail-aside"><section className="sp-panel sp-apply-panel"><span className="sp-eyebrow">APPLICATION WINDOW</span><div className="sp-window-dates"><div><small>Opens</small><strong>{formatDate(challenge.applicationOpensAt, true)}</strong></div><div><small>Closes</small><strong>{formatDate(challenge.applicationClosesAt, true)}</strong></div></div><div className="sp-detail-facts"><div><span>Individual task</span><strong>{challenge.individualTaskDurationDays} days from applying</strong></div><div><span>Compensation</span><strong>{challenge.compensationDetails || (challenge.isPaid ? 'Paid, details to follow' : 'Unpaid')}</strong></div>{challenge.candidateCount != null && <div><span>Candidate limit</span><strong>{challenge.candidateCount}</strong></div>}</div>
-          {application ? <><StatusPill tone={statusTone(application.status)}>{prettyStatus(application.status)}</StatusPill><button className="sp-button sp-button-primary sp-button-wide" onClick={() => go(`/student/applications/${encodeURIComponent(application.id)}`)}>View your application</button></> : windowClosed ? <StateBlock title="Applications closed">This challenge is no longer accepting applications.</StateBlock> : windowNotOpen ? <><StateBlock title="Applications open soon">You can apply from {formatDate(challenge.applicationOpensAt, true)}.</StateBlock><button className="sp-button sp-button-disabled sp-button-wide" disabled>Not open yet</button></> : <button className="sp-button sp-button-primary sp-button-wide" onClick={apply} disabled={busy}>{busy ? 'Applying…' : 'Apply to challenge'} <StudentIcon name="arrow" size={16} /></button>}
-          {applyError && <div className="student-alert student-alert-error" role="alert">{applyError}</div>}
-          <p className="sp-application-note">Your task deadline is calculated when you apply and is separate from this application window.</p>
-        </section></aside>
-    </div>
-  </>;
-}
-
 export function MyApplicationsPage({ go }) {
   const [applications, setApplications] = useState([]);
   const [companyByChallenge, setCompanyByChallenge] = useState({});

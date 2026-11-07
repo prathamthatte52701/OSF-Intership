@@ -1655,59 +1655,6 @@ a:hover {
   word-break: break-word;
 }
 
-/* Quick Action Cards */
-.quick-actions-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  margin-top: 24px;
-}
-
-.quick-action-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 18px 20px;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  text-align: left;
-  transition: all var(--transition-fast);
-  color: var(--text-primary);
-}
-
-.quick-action-card:hover {
-  border-color: var(--osf-blue);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
-}
-
-.quick-action-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius-sm);
-  background-color: var(--osf-blue-light);
-  color: var(--osf-blue);
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-
-.quick-action-text {
-  flex: 1;
-}
-
-.quick-action-text strong {
-  display: block;
-  font-size: 15.4px;
-  margin-bottom: 2px;
-}
-
-.quick-action-text span {
-  font-size: 13.8px;
-  color: var(--text-secondary);
-}
-
 /* Activity Section & Honest Empty State */
 .empty-state-box {
   display: flex;
@@ -1951,10 +1898,6 @@ a:hover {
   .contact-grid {
     grid-template-columns: 1fr;
   }
-
-  .quick-actions-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Mobile Screens (Under 768px) */
@@ -2051,7 +1994,6 @@ a:hover {
   .dash-sidebar { display: none; }
   .mobile-dash-nav { display: flex; }
   .contact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .quick-actions-grid { grid-template-columns: 1fr; }
   .main-panel, .dash-main-area { min-height: 100%; }
 }
 @container osf-app (max-width: 768px) {
