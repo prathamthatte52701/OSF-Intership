@@ -118,8 +118,8 @@ function studentProfile(db, studentId, { privateFields = false, includeResume = 
   if (profile) { profile.skills = listStudentSkills(db, studentId); profile.projects = listProjects(db, studentId); }
   return profile;
 }
-function assertApplicationOwner(db, appId, studentId) {
-  const app = db.prepare('SELECT * FROM applications WHERE id=? AND student_id=?').get(appId, studentId);
+async function assertApplicationOwner(applications, appId, studentId) {
+  const app = await applications.getForStudent(appId, studentId);
   if (!app) throw new InputError('Application not found.', 404);
   return app;
 }
@@ -128,39 +128,34 @@ function ownedChallenge(db, challengeId, companyId) {
   if (!challenge) throw new InputError('Challenge not found.', 404);
   return challenge;
 }
-function ownedApplication(db, applicationId, companyId) {
-  const row = db.prepare(`SELECT a.*,c.company_id FROM applications a JOIN challenges c ON c.id=a.challenge_id
-    WHERE a.id=? AND c.company_id=?`).get(applicationId, companyId);
+async function ownedApplication(applications, applicationId, companyId) {
+  const row = await applications.getForCompany(applicationId, companyId);
   if (!row) throw new InputError('Application not found.', 404);
   return row;
 }
-function syncExpiredApplication(db, application) {
+async function syncExpiredApplication(applications, application) {
   if (application.status !== 'SUBMITTED' && application.status !== 'EXPIRED' && Date.parse(application.individual_deadline) <= nowMs()) {
-    db.prepare("UPDATE applications SET status='EXPIRED',updated_at=? WHERE id=? AND status<>'SUBMITTED'").run(nowIso(), application.id);
+    await applications.markExpired(application.id, nowIso());
     application.status = 'EXPIRED';
   }
   return application;
 }
-function requireApplicationSubmissionState(db, applicationId, studentId) {
-  const application = syncExpiredApplication(db, assertApplicationOwner(db, applicationId, studentId));
+async function requireApplicationSubmissionState(applications, applicationId, studentId) {
+  const application = await syncExpiredApplication(applications, await assertApplicationOwner(applications, applicationId, studentId));
   if (application.status === 'EXPIRED' || Date.parse(application.individual_deadline) <= nowMs()) {
-    if (application.status !== 'EXPIRED') syncExpiredApplication(db, application);
+    if (application.status !== 'EXPIRED') await syncExpiredApplication(applications, application);
     throw new InputError('The individual task deadline has passed.', 409);
   }
   if (!['IN_PROGRESS', 'SUBMITTED'].includes(application.status)) {
     throw new InputError('Start your task before uploading or submitting work.', 409);
   }
-  if (db.prepare('SELECT 1 FROM evaluations WHERE application_id=?').get(application.id)) {
+  if (await applications.hasEvaluation(application.id)) {
     throw new InputError('This application has already been evaluated and can no longer be changed.', 400);
   }
   return application;
 }
-function fileMetadata(db, applicationId, fileId) {
-  return db.prepare(`SELECT id,application_id,storage_key,original_name,mime_type,size_bytes,created_at
-    FROM submission_files WHERE id=? AND application_id=?`).get(fileId, applicationId);
-}
-function publicFileMetadata(db, applicationId, fileId) {
-  const file = fileMetadata(db, applicationId, fileId);
+async function publicFileMetadata(applications, applicationId, fileId) {
+  const file = await applications.getFile(applicationId, fileId);
   return file ? { id: file.id, name: file.original_name, mimeType: file.mime_type, sizeBytes: file.size_bytes, uploadedAt: file.created_at } : null;
 }
 
@@ -245,7 +240,7 @@ function challengeView(row) { // row comes from the challenges repository (alrea
   };
 }
 
-export function createPlatformRouter({ db, student, challenges, requireCompanyAuth }) {
+export function createPlatformRouter({ db, student, challenges, applications, requireCompanyAuth }) {
   const router = express.Router();
   const studentAuth = requireStudent(student);
   const companyAuth = requireCompanyAuth;
@@ -443,49 +438,28 @@ export function createPlatformRouter({ db, student, challenges, requireCompanyAu
     if (!row) throw new InputError('Challenge not found.', 404);
     res.json({ challenge: challengeView(row) });
   }));
-  router.post('/student/challenges/:id/applications', studentAuth, (req, res) => {
+  router.post('/student/challenges/:id/applications', studentAuth, asyncRoute(async (req, res) => {
     if (!req.student.student_id) throw new InputError('Complete your student profile before applying.', 409);
-    const challenge = db.prepare("SELECT * FROM challenges WHERE id=? AND status='PUBLISHED'").get(req.params.id);
-    if (!challenge) throw new InputError('Challenge is not available for applications.', 404);
-    const appliedAt = nowMs();
-    if (appliedAt < Date.parse(challenge.application_opens_at) || appliedAt > Date.parse(challenge.application_closes_at)) throw new InputError('Applications are outside this challenge’s application window.', 409);
-    const appliedIso = new Date(appliedAt).toISOString();
-    const deadline = new Date(appliedAt + challenge.individual_task_duration_days * 86400000).toISOString();
-    const id = newId();
-    try {
-      db.prepare(`INSERT INTO applications(id,challenge_id,student_id,applied_at,individual_deadline,status,created_at,updated_at)
-        VALUES (?,?,?,?,?,'APPLIED',?,?)`).run(id, challenge.id, req.student.student_id, appliedIso, deadline, appliedIso, appliedIso);
-    } catch (error) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new InputError('You already applied to this challenge.', 409);
-      throw error;
-    }
-    res.status(201).json({ application: { id, challengeId: challenge.id, appliedAt: appliedIso, individualDeadline: deadline, status: 'APPLIED' } });
-  });
-  router.post('/student/applications/:id/start', studentAuth, (req, res) => {
-    const application = syncExpiredApplication(db, assertApplicationOwner(db, req.params.id, req.student.student_id));
+    const result = await applications.apply({ id: newId(), challengeId: req.params.id, studentId: req.student.student_id, now: nowMs() });
+    if (result.status === 'NOT_AVAILABLE') throw new InputError('Challenge is not available for applications.', 404);
+    if (result.status === 'WINDOW_CLOSED') throw new InputError('Applications are outside this challenge’s application window.', 409);
+    if (result.status === 'DUPLICATE') throw new InputError('You already applied to this challenge.', 409);
+    res.status(201).json({ application: result.application });
+  }));
+  router.post('/student/applications/:id/start', studentAuth, asyncRoute(async (req, res) => {
+    const application = await syncExpiredApplication(applications, await assertApplicationOwner(applications, req.params.id, req.student.student_id));
     if (!assertApplicationDeadline(application)) {
-      syncExpiredApplication(db, application);
+      await syncExpiredApplication(applications, application);
       throw new InputError('The individual task deadline has passed.', 409);
     }
     if (application.status === 'SUBMITTED') throw new InputError('This application has already been submitted.', 409);
     if (application.status === 'EXPIRED') throw new InputError('The individual task deadline has passed.', 409);
-    if (application.status === 'APPLIED') db.prepare("UPDATE applications SET status='IN_PROGRESS',updated_at=? WHERE id=?").run(nowIso(), application.id);
+    if (application.status === 'APPLIED') await applications.markInProgress(application.id, nowIso());
     res.json({ application: { id: application.id, status: 'IN_PROGRESS', individualDeadline: application.individual_deadline } });
-  });
-  router.get('/student/applications', studentAuth, (req, res) => {
-    const applications = db.prepare(`SELECT a.id,a.challenge_id AS challengeId,a.applied_at AS appliedAt,a.individual_deadline AS individualDeadline,
-      a.status,a.updated_at AS updatedAt,c.role_title AS roleTitle,c.status AS challengeStatus,c.application_closes_at AS applicationClosesAt,
-      c.application_opens_at AS applicationOpensAt,substr(c.task_description,1,280) AS taskSnippet,c.is_paid AS isPaid,
-      c.compensation_details AS compensationDetails,c.individual_task_duration_days AS individualTaskDurationDays,co.company_name AS companyName
-      FROM applications a JOIN challenges c ON c.id=a.challenge_id LEFT JOIN companies co ON co.id=c.company_id WHERE a.student_id=? ORDER BY a.applied_at DESC`).all(req.student.student_id);
-    const rows = applications.map(application => {
-      const expired = application.status !== 'SUBMITTED' && Date.parse(application.individualDeadline) <= nowMs();
-      if (expired && application.status !== 'EXPIRED') db.prepare("UPDATE applications SET status='EXPIRED',updated_at=? WHERE id=? AND status<>'SUBMITTED'").run(nowIso(), application.id);
-      return { ...application, isPaid: Boolean(application.isPaid), requiredSkills: challengeSkills(db, application.challengeId), status: expired ? 'EXPIRED' : application.status, submission: db.prepare('SELECT submitted_at AS submittedAt FROM submissions WHERE application_id=?').get(application.id) || null,
-        evaluation: db.prepare('SELECT rating,feedback,is_shortlisted AS isShortlisted,evaluated_at AS evaluatedAt FROM evaluations WHERE application_id=?').get(application.id) || null };
-    });
-    res.json({ applications: rows });
-  });
+  }));
+  router.get('/student/applications', studentAuth, asyncRoute(async (req, res) => {
+    res.json({ applications: await applications.listForStudent(req.student.student_id, nowMs(), nowIso()) });
+  }));
 
   // Company-owned challenge management.
   router.post('/company/challenges', companyAuth, asyncRoute(async (req, res) => {
@@ -519,54 +493,38 @@ export function createPlatformRouter({ db, student, challenges, requireCompanyAu
   }));
 
   // Company applicant, submission, and evaluation views always join through owned challenges.
-  router.get('/company/challenges/:id/applications', companyAuth, (req, res) => {
-    const challenge = ownedChallenge(db, req.params.id, req.session.company_id);
-    const rows = db.prepare(`SELECT a.id,a.student_id AS studentId,a.applied_at AS appliedAt,a.individual_deadline AS individualDeadline,a.status,
-      s.full_name AS fullName,s.college,s.degree,
-      (SELECT submitted_at FROM submissions WHERE application_id=a.id) AS submittedAt,
-      COALESCE((SELECT is_shortlisted FROM evaluations WHERE application_id=a.id),0) AS isShortlisted
-      FROM applications a JOIN students s ON s.id=a.student_id WHERE a.challenge_id=? ORDER BY a.applied_at DESC`).all(challenge.id)
-      .map(row => ({ ...row, isShortlisted: Boolean(row.isShortlisted), skills: listStudentSkills(db, row.studentId) }));
-    const applications = rows.map(row => {
-      if (row.status !== 'SUBMITTED' && Date.parse(row.individualDeadline) <= nowMs()) {
-        db.prepare("UPDATE applications SET status='EXPIRED',updated_at=? WHERE id=? AND status<>'SUBMITTED'").run(nowIso(), row.id);
-        return { ...row, status: 'EXPIRED' };
-      }
-      return row;
-    });
-    res.json({ applications });
-  });
-  router.get('/company/applications/:id', companyAuth, (req, res) => {
-    const application = syncExpiredApplication(db, ownedApplication(db, req.params.id, req.session.company_id));
-    const profile = studentProfile(db, application.student_id, { includeResume: true });
-    const submission = db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
-      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=? AND submitted_at IS NOT NULL`).get(application.id) || null;
-    if (submission?.fileReference) submission.file = fileMetadata(db, application.id, submission.fileReference) ? { id: submission.fileReference } : null;
-    const evaluation = db.prepare('SELECT id,rating,feedback,is_shortlisted AS isShortlisted,evaluated_at AS evaluatedAt FROM evaluations WHERE application_id=?').get(application.id) || null;
+  router.get('/company/challenges/:id/applications', companyAuth, asyncRoute(async (req, res) => {
+    const challenge = await challengeOwnedByCompany(challenges, req.params.id, req.session.company_id);
+    res.json({ applications: await applications.listForChallenge(challenge.id, nowMs(), nowIso()) });
+  }));
+  router.get('/company/applications/:id', companyAuth, asyncRoute(async (req, res) => {
+    const application = await syncExpiredApplication(applications, await ownedApplication(applications, req.params.id, req.session.company_id));
+    const profile = await student.buildStudentProfile(application.student_id, { includeResume: true });
+    const submission = await applications.getSubmission(application.id, { submittedOnly: true });
+    if (submission?.fileReference) submission.file = await applications.getFile(application.id, submission.fileReference) ? { id: submission.fileReference } : null;
+    const evaluation = await applications.getEvaluation(application.id);
     res.json({ application: { id: application.id, challengeId: application.challenge_id, appliedAt: application.applied_at, individualDeadline: application.individual_deadline, status: application.status, student: profile, submission, evaluation } });
-  });
+  }));
   // Full profile + contact email, only for students who applied to one of this company's challenges.
-  router.get('/company/applications/:id/student', companyAuth, (req, res) => {
-    const application = ownedApplication(db, req.params.id, req.session.company_id);
-    const profile = studentProfile(db, application.student_id, { includeResume: true });
+  router.get('/company/applications/:id/student', companyAuth, asyncRoute(async (req, res) => {
+    const application = await ownedApplication(applications, req.params.id, req.session.company_id);
+    const profile = await student.buildStudentProfile(application.student_id, { includeResume: true });
     if (!profile) throw new InputError('Application not found.', 404);
-    profile.contactEmail = db.prepare('SELECT u.email FROM students s JOIN student_users u ON u.id=s.account_id WHERE s.id=?').get(application.student_id)?.email || null;
+    profile.contactEmail = await applications.studentContactEmail(application.student_id);
     res.json({ student: profile });
-  });
-  router.get('/company/applications/:id/file', companyAuth, (req, res) => {
-    const application = ownedApplication(db, req.params.id, req.session.company_id);
-    const file = db.prepare(`SELECT f.* FROM submission_files f JOIN submissions s ON s.file_reference=f.id WHERE f.application_id=? AND s.submitted_at IS NOT NULL`).get(application.id);
-    sendSubmissionFile(res, file);
-  });
-  router.get('/student/applications/:id/file', studentAuth, (req, res) => {
-    assertApplicationOwner(db, req.params.id, req.student.student_id);
-    const file = db.prepare(`SELECT f.* FROM submission_files f JOIN submissions s ON s.file_reference=f.id WHERE f.application_id=?`).get(req.params.id);
-    sendSubmissionFile(res, file);
-  });
+  }));
+  router.get('/company/applications/:id/file', companyAuth, asyncRoute(async (req, res) => {
+    const application = await ownedApplication(applications, req.params.id, req.session.company_id);
+    sendSubmissionFile(res, await applications.getSubmissionFile(application.id, { submittedOnly: true }));
+  }));
+  router.get('/student/applications/:id/file', studentAuth, asyncRoute(async (req, res) => {
+    await assertApplicationOwner(applications, req.params.id, req.student.student_id);
+    sendSubmissionFile(res, await applications.getSubmissionFile(req.params.id));
+  }));
   router.put('/student/applications/:id/file', studentAuth, express.raw({
     type: ['application/octet-stream', ...[...publicFileTypes.values()].flatMap(types => [...types])], limit: '10mb',
   }), asyncRoute(async (req, res) => {
-    const application = requireApplicationSubmissionState(db, req.params.id, req.student.student_id);
+    const application = await requireApplicationSubmissionState(applications, req.params.id, req.student.student_id);
     if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new InputError('Upload a non-empty file.');
     const fileNameHeader = req.get('x-file-name');
     if (!fileNameHeader || fileNameHeader.length > 180) throw new InputError('Provide a file name of 180 characters or fewer in X-File-Name.');
@@ -580,107 +538,70 @@ export function createPlatformRouter({ db, student, challenges, requireCompanyAu
     const filePath = resolve(uploadDir, storageKey);
     await writeFile(filePath, req.body, { flag: 'wx', mode: 0o600 });
     const id = newId(); const timestamp = nowIso();
-    let replaced = [];
+    let saved;
     try {
-      const saveFile = db.transaction(() => {
-        const current = syncExpiredApplication(db, assertApplicationOwner(db, application.id, req.student.student_id));
-        if (!['IN_PROGRESS', 'SUBMITTED'].includes(current.status) || Date.parse(current.individual_deadline) <= nowMs()) {
-          syncExpiredApplication(db, current);
-          return false;
-        }
-        db.prepare('INSERT INTO submission_files(id,application_id,storage_key,original_name,mime_type,size_bytes,created_at) VALUES (?,?,?,?,?,?,?)')
-          .run(id, application.id, storageKey, originalName, mimeType, req.body.length, timestamp);
-        db.prepare(`INSERT INTO submissions(id,application_id,file_reference,created_at,updated_at) VALUES (?,?,?,?,?)
-          ON CONFLICT(application_id) DO UPDATE SET file_reference=excluded.file_reference,updated_at=excluded.updated_at`)
-          .run(newId(), application.id, id, timestamp, timestamp);
-        // Replacing a file removes every older row for this application; disk files are unlinked after commit.
-        replaced = db.prepare('SELECT id,storage_key FROM submission_files WHERE application_id=? AND id<>?').all(application.id, id);
-        db.prepare('DELETE FROM submission_files WHERE application_id=? AND id<>?').run(application.id, id);
-        return true;
-      });
-      if (!saveFile()) {
-        await unlink(filePath).catch(() => {});
-        throw new InputError('Start your task before uploading work, or check its individual deadline.', 409);
-      }
+      saved = await applications.saveFile({ fileId: id, submissionId: newId(), applicationId: application.id, studentId: req.student.student_id,
+        storageKey, originalName, mimeType, sizeBytes: req.body.length, now: nowMs(), ts: timestamp });
+      if (!saved.ok) throw new InputError('Start your task before uploading work, or check its individual deadline.', 409);
     } catch (error) {
       await unlink(filePath).catch(() => {});
       throw error;
     }
-    for (const old of replaced) await unlink(resolve(uploadDir, old.storage_key)).catch(() => {});
+    // Replacing a file removed every older metadata row; unlink their disk files now that the change is committed.
+    for (const old of saved.replaced) await unlink(resolve(uploadDir, old.storage_key)).catch(() => {});
     res.status(201).json({ file: { id, name: originalName, mimeType, sizeBytes: req.body.length } });
   }));
-  router.put('/student/applications/:id/draft', studentAuth, (req, res) => {
-    const application = requireApplicationSubmissionState(db, req.params.id, req.student.student_id);
+  router.put('/student/applications/:id/draft', studentAuth, asyncRoute(async (req, res) => {
+    const application = await requireApplicationSubmissionState(applications, req.params.id, req.student.student_id);
     const body = req.body || {};
     const githubUrl = optionalUrl(body.githubUrl, 'GitHub repository URL');
     const deployedUrl = optionalUrl(body.deployedUrl, 'Deployed website URL');
     const supportingInformation = optionalText(body.supportingInformation, 'Supporting information', 5000);
     const timestamp = nowIso();
-    const saved = db.prepare(`INSERT INTO submissions(id,application_id,github_url,deployed_url,supporting_information,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?) ON CONFLICT(application_id) DO UPDATE SET github_url=excluded.github_url,deployed_url=excluded.deployed_url,
-      supporting_information=excluded.supporting_information,updated_at=excluded.updated_at WHERE submissions.submitted_at IS NULL`)
-      .run(newId(), application.id, githubUrl, deployedUrl, supportingInformation, timestamp, timestamp);
-    if (!saved.changes) throw new InputError('This task has already been submitted; drafts are no longer saved.', 409);
+    if (!await applications.saveDraft({ id: newId(), applicationId: application.id, githubUrl, deployedUrl, supportingInformation, ts: timestamp })) {
+      throw new InputError('This task has already been submitted; drafts are no longer saved.', 409);
+    }
     res.json({ draft: { savedAt: timestamp } });
-  });
-  router.put('/student/applications/:id/submission', studentAuth, (req, res) => {
-    const application = requireApplicationSubmissionState(db, req.params.id, req.student.student_id);
+  }));
+  router.put('/student/applications/:id/submission', studentAuth, asyncRoute(async (req, res) => {
+    const application = await requireApplicationSubmissionState(applications, req.params.id, req.student.student_id);
     const body = req.body || {};
     const githubUrl = optionalUrl(body.githubUrl, 'GitHub repository URL');
     const deployedUrl = optionalUrl(body.deployedUrl, 'Deployed website URL');
     const supportingInformation = optionalText(body.supportingInformation, 'Supporting information', 5000);
     const fileReference = optionalText(body.fileReference, 'File reference', 40);
     if (!githubUrl && !deployedUrl && !supportingInformation && !fileReference) throw new InputError('Add a repository, deployed website, uploaded file, or supporting information.');
-    if (fileReference && !fileMetadata(db, application.id, fileReference)) throw new InputError('Uploaded file not found for this application.', 400);
+    if (fileReference && !await applications.getFile(application.id, fileReference)) throw new InputError('Uploaded file not found for this application.', 400);
     const timestamp = nowIso();
-    const save = db.transaction(() => {
-      const current = syncExpiredApplication(db, assertApplicationOwner(db, application.id, req.student.student_id));
-      if (!['IN_PROGRESS', 'SUBMITTED'].includes(current.status) || Date.parse(current.individual_deadline) <= nowMs()) {
-        syncExpiredApplication(db, current);
-        return false;
-      }
-      db.prepare(`INSERT INTO submissions(id,application_id,github_url,deployed_url,file_reference,supporting_information,submitted_at,created_at,updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(application_id) DO UPDATE SET github_url=excluded.github_url,deployed_url=excluded.deployed_url,
-        file_reference=COALESCE(excluded.file_reference,submissions.file_reference),supporting_information=excluded.supporting_information,
-        submitted_at=excluded.submitted_at,updated_at=excluded.updated_at`)
-        .run(newId(), application.id, githubUrl, deployedUrl, fileReference, supportingInformation, timestamp, timestamp, timestamp);
-      db.prepare("UPDATE applications SET status='SUBMITTED',updated_at=? WHERE id=?").run(timestamp, application.id);
-      return true;
-    });
-    if (!save()) throw new InputError('Start your task before submitting work, or check its individual deadline.', 409);
-    res.json({ submission: db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
-      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=?`).get(application.id) });
-  });
-  router.get('/student/applications/:id/submission', studentAuth, (req, res) => {
-    assertApplicationOwner(db, req.params.id, req.student.student_id);
-    const submission = db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
-      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=?`).get(req.params.id) || null;
-    if (submission?.fileReference) submission.file = publicFileMetadata(db, req.params.id, submission.fileReference);
+    if (!await applications.saveSubmission({ id: newId(), applicationId: application.id, studentId: req.student.student_id, githubUrl, deployedUrl,
+      fileReference, supportingInformation, now: nowMs(), ts: timestamp })) throw new InputError('Start your task before submitting work, or check its individual deadline.', 409);
+    res.json({ submission: await applications.getSubmission(application.id) });
+  }));
+  router.get('/student/applications/:id/submission', studentAuth, asyncRoute(async (req, res) => {
+    await assertApplicationOwner(applications, req.params.id, req.student.student_id);
+    const submission = await applications.getSubmission(req.params.id);
+    if (submission?.fileReference) submission.file = await publicFileMetadata(applications, req.params.id, submission.fileReference);
     res.json({ submission });
-  });
-  router.get('/company/applications/:id/submission', companyAuth, (req, res) => {
-    const app = ownedApplication(db, req.params.id, req.session.company_id);
-    const submission = db.prepare(`SELECT id,github_url AS githubUrl,deployed_url AS deployedUrl,file_reference AS fileReference,
-      supporting_information AS supportingInformation,submitted_at AS submittedAt,updated_at AS updatedAt FROM submissions WHERE application_id=? AND submitted_at IS NOT NULL`).get(app.id) || null;
-    if (submission?.fileReference) submission.file = publicFileMetadata(db, app.id, submission.fileReference);
+  }));
+  router.get('/company/applications/:id/submission', companyAuth, asyncRoute(async (req, res) => {
+    const app = await ownedApplication(applications, req.params.id, req.session.company_id);
+    const submission = await applications.getSubmission(app.id, { submittedOnly: true });
+    if (submission?.fileReference) submission.file = await publicFileMetadata(applications, app.id, submission.fileReference);
     res.json({ submission });
-  });
-  router.put('/company/applications/:id/evaluation', companyAuth, (req, res) => {
-    const application = ownedApplication(db, req.params.id, req.session.company_id);
-    if (application.status !== 'SUBMITTED' || !db.prepare('SELECT 1 FROM submissions WHERE application_id=? AND submitted_at IS NOT NULL').get(application.id)) throw new InputError('Only a submitted application can be evaluated.');
+  }));
+  router.put('/company/applications/:id/evaluation', companyAuth, asyncRoute(async (req, res) => {
+    const application = await ownedApplication(applications, req.params.id, req.session.company_id);
+    if (application.status !== 'SUBMITTED' || !await applications.hasSubmitted(application.id)) throw new InputError('Only a submitted application can be evaluated.');
     const body = req.body || {};
     const rating = body.rating == null || body.rating === '' ? null : Number(body.rating);
     if (rating != null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) throw new InputError('Rating must be a whole number from 1 to 5.');
     const feedback = optionalText(body.feedback, 'Feedback', 5000);
     const shortlisted = body.isShortlisted ?? false;
     if (![true, false, 0, 1].includes(shortlisted)) throw new InputError('Shortlist status must be true or false.');
-    const timestamp = nowIso();
-    db.prepare(`INSERT INTO evaluations(id,application_id,rating,feedback,is_shortlisted,evaluated_by,evaluated_at,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(application_id) DO UPDATE SET rating=excluded.rating,feedback=excluded.feedback,
-      is_shortlisted=excluded.is_shortlisted,evaluated_by=excluded.evaluated_by,evaluated_at=excluded.evaluated_at,updated_at=excluded.updated_at`)
-      .run(newId(), application.id, rating, feedback, shortlisted === true || shortlisted === 1 ? 1 : 0, req.session.account_id, timestamp, timestamp, timestamp);
-    res.json({ evaluation: db.prepare('SELECT id,rating,feedback,is_shortlisted AS isShortlisted,evaluated_at AS evaluatedAt FROM evaluations WHERE application_id=?').get(application.id) });
-  });
+    const evaluation = await applications.saveEvaluation({ id: newId(), applicationId: application.id, rating, feedback,
+      isShortlisted: shortlisted === true || shortlisted === 1, evaluatedBy: req.session.account_id, ts: nowIso() });
+    res.json({ evaluation });
+  }));
 
   // Company-authored MCQ assessments keep answer keys on the server. Student serializers
   // below select only prompt/options and never include correct_answer.
